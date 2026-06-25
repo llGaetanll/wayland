@@ -1,0 +1,14 @@
+{
+    "layer": "top",
+    "position": "top",
+    "height": "24",
+    "modules-left": [],
+    "modules-right": ["battery", "clock"],
+    "clock": {
+	"format": "{:%a %b %e  %H:%M}"
+    },
+    "battery": {
+	"format": "{capacity}%",
+	"states": { "warning": 30, "critical": 15 }
+    }
+}

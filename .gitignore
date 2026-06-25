@@ -1,0 +1,17 @@
+/*
+
+!.gitignore
+
+# Local
+ 
+# Config
+!.config
+.config/*
+
+!.config/hypr/
+.config/hypr/wallpapers/
+
+!.config/waybar/
+
+# Misc
+!.zprofile
