@@ -26,6 +26,11 @@ hl.env("HYPRCURSOR_SIZE", "24")
 hl.config({ misc = { force_default_wallpaper = 0, disable_hyprland_logo = true } })
 hl.on("hyprland.start", function() hl.exec_cmd("hyprpaper") end)
 
+-- Audio stack (PipeWire + WirePlumber) — also required for Bluetooth audio
+hl.on("hyprland.start", function() hl.exec_cmd("pipewire") end)
+hl.on("hyprland.start", function() hl.exec_cmd("wireplumber") end)
+hl.on("hyprland.start", function() hl.exec_cmd("pipewire-pulse") end)
+
 -- Top Bar
 hl.on("hyprland.start", function() hl.exec_cmd("waybar") end)
 

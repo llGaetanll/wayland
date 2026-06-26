@@ -3,12 +3,31 @@
     "position": "top",
     "height": "24",
     "modules-left": [],
-    "modules-right": ["battery", "clock"],
+    "modules-right": ["network", "bluetooth", "battery", "clock"],
     "clock": {
 	"format": "{:%a %b %e  %H:%M}"
     },
     "battery": {
 	"format": "{capacity}%",
 	"states": { "warning": 30, "critical": 15 }
+    },
+    "network": {
+	"format-wifi": "WiFi {signalStrength}%",
+	"format-ethernet": "ETH",
+	"format-disconnected": "WiFi off",
+	"tooltip-format-wifi": "{essid}  ({signalStrength}%)\n{ipaddr}",
+	"tooltip-format-ethernet": "{ifname}\n{ipaddr}",
+	"tooltip-format-disconnected": "Not connected",
+	"on-click": "~/.config/waybar/scripts/wifi-menu.sh"
+    },
+    "bluetooth": {
+	"format": "BT",
+	"format-off": "BT off",
+	"format-disabled": "BT off",
+	"format-connected": "BT {num_connections}",
+	"tooltip-format": "{controller_alias}\n{status}",
+	"tooltip-format-connected": "{controller_alias}\n{num_connections} connected\n{device_enumerate}",
+	"tooltip-format-enumerate-connected": "{device_alias}",
+	"on-click": "~/.config/waybar/scripts/bt-menu.sh"
     }
 }
