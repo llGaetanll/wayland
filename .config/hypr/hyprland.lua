@@ -72,3 +72,34 @@ hl.config({
 
 -- UI Scaling
 hl.monitor({output = "eDP-1", mode = "preferred", position = "auto", scale = 1.0 })
+
+-- ============================================================
+-- macOS-like window management
+-- ============================================================
+
+-- Float every window by default (mac-style stacking, not tiling)
+hl.window_rule({ name = "float-all", match = { class = ".*" }, float = true })
+
+-- Resize floating windows by dragging their edges/corners (mac-like).
+-- extend_border_grab_area makes the grabbable edge wider than the visible border.
+hl.config({ general = { resize_on_border = true, extend_border_grab_area = 15 } })
+
+-- Mouse: Super + left-drag moves a window, Super + right-drag resizes it.
+hl.bind("SUPER + mouse:272", hl.dsp.window.drag(),   { mouse = true })
+hl.bind("SUPER + mouse:273", hl.dsp.window.resize(), { mouse = true })
+
+-- Allow hyprpm to load plugins. The Lua config has a permission model;
+-- without this, plugins (e.g. hyprbars for title bars) are denied.
+hl.permission("/usr/(bin|local/bin)/hyprpm", "plugin", "allow")
+
+-- Simple mac-style dock: a second Waybar instance pinned to the bottom.
+hl.on("hyprland.start", function()
+    hl.exec_cmd("waybar -c /home/al/.config/waybar/dock.jsonc -s /home/al/.config/waybar/dock.css")
+end)
+
+-- Title bars (hyprbars): load the plugin and apply mac-style styling at login.
+-- Done from a script (not at parse time) because the plugin isn't loaded yet
+-- when this config is read. See scripts/hyprbars.sh for the why.
+hl.on("hyprland.start", function()
+    hl.exec_cmd("/home/al/.config/hypr/scripts/hyprbars.sh")
+end)

@@ -1,0 +1,21 @@
+{
+    // Simple macOS-style dock: a second Waybar instance pinned to the bottom.
+    // Shows icons for open windows; click to focus, middle-click to close.
+    "layer": "top",
+    "position": "bottom",
+    "height": 56,
+    "margin-bottom": 6,
+    "modules-left": [],
+    "modules-center": ["wlr/taskbar"],
+    "modules-right": [],
+    "wlr/taskbar": {
+        "format": "{icon}",
+        "icon-size": 40,
+        "spacing": 6,
+        "tooltip-format": "{title}",
+        "on-click": "activate",
+        "on-click-middle": "close",
+        "all-outputs": false,
+        "ignore-list": []
+    }
+}

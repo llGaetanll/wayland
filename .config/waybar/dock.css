@@ -1,0 +1,30 @@
+* {
+    font-family: "Inter", sans-serif;
+    font-size: 12px;
+    min-height: 0;
+}
+
+/* Bar itself is invisible; only the centered pill is drawn. */
+window#waybar {
+    background: transparent;
+}
+
+#taskbar {
+    background-color: rgba(40, 40, 40, 0.85);
+    border-radius: 18px;
+    padding: 4px 10px;
+}
+
+#taskbar button {
+    margin: 0 3px;
+    padding: 2px;
+    border-radius: 12px;
+}
+
+#taskbar button.active {
+    background-color: rgba(255, 255, 255, 0.18);
+}
+
+#taskbar button:hover {
+    background-color: rgba(255, 255, 255, 0.12);
+}
