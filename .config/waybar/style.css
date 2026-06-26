@@ -22,6 +22,15 @@ window#waybar {
     padding-right: 12px;
 }
 
+#wireplumber,
+#backlight {
+    padding-right: 12px;
+}
+
+#wireplumber.muted {
+    color: #888888;
+}
+
 #network.disconnected,
 #bluetooth.off,
 #bluetooth.disabled {

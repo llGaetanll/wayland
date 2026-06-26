@@ -3,9 +3,22 @@
     "position": "top",
     "height": "24",
     "modules-left": [],
-    "modules-right": ["network", "bluetooth", "battery", "clock"],
+    "modules-right": ["wireplumber", "backlight", "network", "bluetooth", "battery", "clock"],
     "clock": {
 	"format": "{:%a %b %e  %H:%M}"
+    },
+    "wireplumber": {
+	"format": "Vol {volume}%",
+	"format-muted": "Vol muted",
+	"scroll-step": 5,
+	"max-volume": 100,
+	"on-click": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
+	"tooltip-format": "{node_name}"
+    },
+    "backlight": {
+	"format": "Lum {percent}%",
+	"scroll-step": 5,
+	"tooltip": false
     },
     "battery": {
 	"format": "{capacity}%",
