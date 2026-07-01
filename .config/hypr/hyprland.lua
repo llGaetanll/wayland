@@ -127,13 +127,16 @@ if hl.plugin and hl.plugin.hyprbars ~= nil then
         bar_padding = 10,
         bar_button_padding = 8,
         icon_on_hover = true,
-        on_double_click = "hyprctl dispatch fullscreen 1",
+        on_double_click = [[hyprctl dispatch "hl.dsp.window.fullscreen({ mode = 'maximized' })"]],
     } } })
 
-    -- Traffic-light buttons (left side, mac order): red = close, green = fullscreen.
+    -- Traffic-light buttons (left side, mac order): red = close, green = maximize.
     -- Glyphs only show on hover (icon_on_hover), so they normally read as colored dots.
-    hl.plugin.hyprbars.add_button({ bg_color = "rgb(ff5f57)", fg_color = "rgb(2e2e2e)", size = 11, icon = "×", action = "hyprctl dispatch killactive" })
-    hl.plugin.hyprbars.add_button({ bg_color = "rgb(28c840)", fg_color = "rgb(2e2e2e)", size = 11, icon = "+", action = "hyprctl dispatch fullscreen 1" })
+    -- Actions run through hyprbars' `exec` dispatcher, so they must be shell commands.
+    -- Under Hyprland's Lua config, `hyprctl dispatch <old-dispatcher>` no longer works
+    -- (it's parsed as Lua now), so the action must be `hyprctl dispatch "<lua dispatcher>"`.
+    hl.plugin.hyprbars.add_button({ bg_color = "rgb(ff5f57)", fg_color = "rgb(2e2e2e)", size = 11, icon = "×", action = [[hyprctl dispatch "hl.dsp.window.close()"]] })
+    hl.plugin.hyprbars.add_button({ bg_color = "rgb(28c840)", fg_color = "rgb(2e2e2e)", size = 11, icon = "+", action = [[hyprctl dispatch "hl.dsp.window.fullscreen({ mode = 'maximized' })"]] })
 else
     -- First login: load the (enabled but not-yet-loaded) hyprbars plugin, poll
     -- until it registers, then trigger one `hyprctl reload` so the block above
