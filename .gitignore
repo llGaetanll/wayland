@@ -13,5 +13,14 @@
 
 !.config/waybar/
 
+# Firefox: track only our userChrome + user.js, not the rest of the dir.
+# (Re-include each parent dir, ignore its contents, then re-include the file.)
+!.config/firefox/
+.config/firefox/*
+!.config/firefox/user.js
+!.config/firefox/chrome/
+.config/firefox/chrome/*
+!.config/firefox/chrome/userChrome.css
+
 # Misc
 !.zprofile

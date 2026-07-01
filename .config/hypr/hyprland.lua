@@ -155,6 +155,16 @@ if hl.plugin and hl.plugin.hyprbars ~= nil then
             ["hyprbars:bar_color"] = color,
         })
     end
+
+    -- Firefox: no hyprbars bar. Firefox draws its own tab strip as the title bar,
+    -- and userChrome.css (~/.config/firefox/chrome/userChrome.css) puts macOS-style
+    -- traffic-light buttons inline to the left of the tabs. hyprbars would just be
+    -- a redundant strip above that, so hide it for Firefox windows.
+    hl.window_rule({
+        name = "hyprbars-nobar-firefox",
+        match = { class = "[Ff]irefox" },
+        ["hyprbars:no_bar"] = true,
+    })
 else
     -- First login: load the (enabled but not-yet-loaded) hyprbars plugin, poll
     -- until it registers, then trigger one `hyprctl reload` so the block above
