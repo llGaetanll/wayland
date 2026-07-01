@@ -9,6 +9,13 @@ hl.bind(mod .. " + Q",      hl.dsp.window.close())
 hl.bind(mod .. " + Return", hl.dsp.exec_cmd(terminal))
 hl.bind(mod .. " + W", hl.dsp.exec_cmd(browser))
 
+-- App launcher: mac-style Spotlight (SUPER + Space). Config + theme live in
+-- ~/.config/rofi/{config.rasi,themes/spotlight.rasi}. rofi runs as a Wayland
+-- layer surface (namespace "rofi"), so the float-all window rule doesn't touch
+-- it; the layer_rule below frosts the translucent background instead.
+hl.bind(mod .. " + Space", hl.dsp.exec_cmd("rofi -show drun"))
+hl.layer_rule({ name = "rofi-blur", match = { namespace = "^rofi$" }, blur = true, ignore_alpha = 0.5 })
+
 -- Volume: SUPER +/-  (locked = works on lockscreen, repeating = holds to ramp)
 hl.bind(mod .. " + equal", hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"), { locked = true, repeating = true })
 hl.bind(mod .. " + plus",  hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"), { locked = true, repeating = true })
@@ -80,6 +87,10 @@ hl.monitor({output = "eDP-1", mode = "preferred", position = "auto", scale = 1.0
 
 -- Float every window by default (mac-style stacking, not tiling)
 hl.window_rule({ name = "float-all", match = { class = ".*" }, float = true })
+
+-- Floating windows with no saved geometry (e.g. a fresh Firefox window) otherwise
+-- map at a tiny default size. Give Firefox a sensible size and center it on open.
+hl.window_rule({ name = "firefox-size", match = { class = "[Ff]irefox" }, size = "1500 950", center = true })
 
 -- Resize floating windows by dragging their edges/corners (mac-like).
 -- extend_border_grab_area makes the grabbable edge wider than the visible border.

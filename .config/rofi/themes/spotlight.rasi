@@ -1,0 +1,101 @@
+/*
+ * macOS Spotlight–style theme for rofi.
+ *
+ * Palette is deliberately the same as the Waybar dock
+ * (~/.config/waybar/dock.css): rgba(40,40,40,0.85) fill, white text, Inter.
+ * That way the launcher, dock, and titlebars all read as one system.
+ *
+ * The translucency only looks "frosted" if the compositor blurs the surface
+ * behind it — see the `layerrule blur, rofi` in hyprland.lua.
+ */
+
+* {
+    /* --- palette (keep in sync with waybar/dock.css) --- */
+    bg:      rgba(40, 40, 40, 0.85);   /* window fill */
+    fg:      #ffffff;                  /* primary text */
+    muted:   rgba(235, 235, 235, 0.55);/* placeholder / secondary */
+    sel:     rgba(255, 255, 255, 0.12);/* selected row */
+    sep:     rgba(255, 255, 255, 0.08);/* divider under the search field */
+
+    background-color: transparent;
+    text-color:       @fg;
+}
+
+window {
+    /* Spotlight sits centred, nudged up into the top third. */
+    location:      center;
+    anchor:        center;
+    y-offset:      -140px;
+    width:         640px;
+
+    background-color: @bg;
+    border-radius:    14px;
+    padding:          0;
+}
+
+mainbox {
+    children: [ inputbar, listview ];
+    spacing:  0;
+    padding:  0;
+}
+
+/* --- search field --- */
+inputbar {
+    children: [ entry ];
+    padding:  16px 22px;
+    spacing:  0;
+}
+
+entry {
+    font:              "Inter 20";
+    text-color:        @fg;
+    placeholder:       "Spotlight Search";
+    placeholder-color: @muted;
+    cursor:            text;
+    vertical-align:    0.5;
+}
+
+/* --- results --- */
+listview {
+    /* Shrink the window to the number of results (mac-like), up to 8 rows. */
+    dynamic:      true;
+    fixed-height: false;
+    lines:        8;
+    columns:      1;
+    scrollbar:    false;
+
+    padding:      8px 8px 12px 8px;
+    spacing:      2px;
+    border:       1px 0px 0px 0px;   /* thin divider under the search field */
+    border-color: @sep;
+}
+
+element {
+    children:      [ element-icon, element-text ];
+    padding:       8px 12px;
+    spacing:       12px;
+    border-radius: 8px;
+}
+
+element normal.normal,
+element alternate.normal {
+    background-color: transparent;
+    text-color:       @fg;
+}
+
+element selected.normal {
+    background-color: @sel;
+    text-color:       @fg;
+}
+
+element-icon {
+    size:           26px;
+    vertical-align: 0.5;
+    background-color: transparent;
+}
+
+element-text {
+    vertical-align: 0.5;
+    text-color:     inherit;
+    background-color: transparent;
+}
