@@ -3,15 +3,14 @@
     // Shows icons for open windows; click to focus, middle-click to close.
     "layer": "top",
     "position": "bottom",
-    "height": 56,
-    "margin-bottom": 6,
+    "height": 72,
+    "margin-bottom": 0,
     "modules-left": [],
     "modules-center": ["wlr/taskbar"],
     "modules-right": [],
     "wlr/taskbar": {
         "format": "{icon}",
-        "icon-size": 40,
-        "spacing": 6,
+        "icon-size": 48,
         "tooltip-format": "{title}",
         "on-click": "activate",
         "on-click-middle": "close",
