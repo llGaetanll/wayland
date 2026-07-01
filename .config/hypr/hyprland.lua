@@ -34,6 +34,7 @@ hl.env("HYPRCURSOR_SIZE", "24")
 
 -- Set Wallpaper
 hl.config({ misc = { force_default_wallpaper = 0, disable_hyprland_logo = true } })
+hl.config({ cursor = { no_hardware_cursors = true } })
 hl.on("hyprland.start", function() hl.exec_cmd("hyprpaper") end)
 
 -- Audio stack (PipeWire + WirePlumber) — also required for Bluetooth audio
@@ -82,7 +83,12 @@ hl.window_rule({ name = "float-all", match = { class = ".*" }, float = true })
 
 -- Resize floating windows by dragging their edges/corners (mac-like).
 -- extend_border_grab_area makes the grabbable edge wider than the visible border.
-hl.config({ general = { resize_on_border = true, extend_border_grab_area = 15 } })
+-- border_size = 0 removes the (white) active-window border; grabbing still
+-- works via extend_border_grab_area.
+hl.config({ general = { resize_on_border = true, extend_border_grab_area = 15, border_size = 0 } })
+
+-- Rounded corners (all four — Hyprland rounding is uniform, no per-corner).
+hl.config({ decoration = { rounding = 6 } })
 
 -- Mouse: Super + left-drag moves a window, Super + right-drag resizes it.
 hl.bind("SUPER + mouse:272", hl.dsp.window.drag(),   { mouse = true })
@@ -97,9 +103,54 @@ hl.on("hyprland.start", function()
     hl.exec_cmd("waybar -c /home/al/.config/waybar/dock.jsonc -s /home/al/.config/waybar/dock.css")
 end)
 
--- Title bars (hyprbars): load the plugin and apply mac-style styling at login.
--- Done from a script (not at parse time) because the plugin isn't loaded yet
--- when this config is read. See scripts/hyprbars.sh for the why.
-hl.on("hyprland.start", function()
-    hl.exec_cmd("/home/al/.config/hypr/scripts/hyprbars.sh")
-end)
+-- Title bars (hyprbars), mac-style.
+--
+-- hyprbars' button list is additive: add_button() only ever appends, and the
+-- list is cleared in exactly one place internally — on a Hyprland config reload
+-- (onPreConfigReload). So declaring the buttons here, in the config, makes them
+-- idempotent: every reload clears the list and this block re-adds exactly these
+-- two. (Adding them out-of-band via `hyprctl eval` is what made a fresh red/green
+-- pair pile up on every reload.)
+--
+-- The guard is required because hyprpm plugins are NOT loaded yet when this
+-- config is first parsed at login, so hl.plugin.hyprbars is nil on that pass.
+-- The bootstrap in the else branch loads the plugin and then triggers a reload,
+-- which re-runs this block with the plugin present.
+if hl.plugin and hl.plugin.hyprbars ~= nil then
+    hl.config({ plugin = { hyprbars = {
+        bar_height = 26,
+        bar_color = "rgb(2e2e2e)",
+        bar_text_size = 0,
+        bar_text_font = "Inter",
+        bar_text_align = "center",
+        bar_buttons_alignment = "left",
+        bar_padding = 10,
+        bar_button_padding = 8,
+        icon_on_hover = true,
+        on_double_click = "hyprctl dispatch fullscreen 1",
+    } } })
+
+    -- Traffic-light buttons (left side, mac order): red = close, green = fullscreen.
+    -- Glyphs only show on hover (icon_on_hover), so they normally read as colored dots.
+    hl.plugin.hyprbars.add_button({ bg_color = "rgb(ff5f57)", fg_color = "rgb(2e2e2e)", size = 11, icon = "×", action = "hyprctl dispatch killactive" })
+    hl.plugin.hyprbars.add_button({ bg_color = "rgb(28c840)", fg_color = "rgb(2e2e2e)", size = 11, icon = "+", action = "hyprctl dispatch fullscreen 1" })
+else
+    -- First login: load the (enabled but not-yet-loaded) hyprbars plugin, poll
+    -- until it registers, then trigger one `hyprctl reload` so the block above
+    -- runs with the plugin present. The reload wipes this timer, so it can't loop;
+    -- we also stop it ourselves and give up after ~10s if the plugin never shows.
+    hl.on("hyprland.start", function()
+        hl.exec_cmd("hyprpm reload -n")
+        local tries = 0
+        local poll
+        poll = hl.timer(function()
+            tries = tries + 1
+            if hl.plugin and hl.plugin.hyprbars ~= nil then
+                poll:set_enabled(false)
+                hl.exec_cmd("hyprctl reload")
+            elseif tries >= 50 then
+                poll:set_enabled(false)
+            end
+        end, { timeout = 200, type = "repeat" })
+    end)
+end
