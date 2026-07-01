@@ -137,6 +137,24 @@ if hl.plugin and hl.plugin.hyprbars ~= nil then
     -- (it's parsed as Lua now), so the action must be `hyprctl dispatch "<lua dispatcher>"`.
     hl.plugin.hyprbars.add_button({ bg_color = "rgb(ff5f57)", fg_color = "rgb(2e2e2e)", size = 11, icon = "×", action = [[hyprctl dispatch "hl.dsp.window.close()"]] })
     hl.plugin.hyprbars.add_button({ bg_color = "rgb(28c840)", fg_color = "rgb(2e2e2e)", size = 11, icon = "+", action = [[hyprctl dispatch "hl.dsp.window.fullscreen({ mode = 'maximized' })"]] })
+
+    -- Per-app title bar colors: make each app's bar blend into that app's own
+    -- background instead of the global bar_color above. hyprbars exposes a
+    -- per-window `hyprbars:bar_color` effect; a window rule keyed on class sets it.
+    -- To theme another app, add a `[class] = color` entry — nothing else to change.
+    --
+    -- Alacritty has no [colors.primary] in its config, so it uses the built-in
+    -- default background #181818 (alacritty 0.17). Update this if you set a theme.
+    local bar_colors = {
+        Alacritty = "rgb(181818)",
+    }
+    for class, color in pairs(bar_colors) do
+        hl.window_rule({
+            name = "hyprbars-color-" .. class,
+            match = { class = "^" .. class .. "$" },
+            ["hyprbars:bar_color"] = color,
+        })
+    end
 else
     -- First login: load the (enabled but not-yet-loaded) hyprbars plugin, poll
     -- until it registers, then trigger one `hyprctl reload` so the block above
