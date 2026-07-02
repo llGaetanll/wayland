@@ -17,14 +17,14 @@ hl.bind(mod .. " + Space", hl.dsp.exec_cmd("rofi -show drun"))
 hl.layer_rule({ name = "rofi-blur", match = { namespace = "^rofi$" }, blur = true, ignore_alpha = 0.5 })
 
 -- Volume: SUPER +/-  (locked = works on lockscreen, repeating = holds to ramp)
-hl.bind(mod .. " + equal", hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"), { locked = true, repeating = true })
-hl.bind(mod .. " + plus",  hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"), { locked = true, repeating = true })
-hl.bind(mod .. " + minus", hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"),       { locked = true, repeating = true })
+hl.bind(mod .. " + equal", hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+ && ~/.config/waybar/scripts/statusbar-icon.sh volume"), { locked = true, repeating = true })
+hl.bind(mod .. " + plus",  hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+ && ~/.config/waybar/scripts/statusbar-icon.sh volume"), { locked = true, repeating = true })
+hl.bind(mod .. " + minus", hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- && ~/.config/waybar/scripts/statusbar-icon.sh volume"),       { locked = true, repeating = true })
 
 -- Brightness: SUPER + ALT +/-  (needs brightnessctl)
-hl.bind(mod .. " + ALT + equal", hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%+"), { locked = true, repeating = true })
-hl.bind(mod .. " + ALT + plus",  hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%+"), { locked = true, repeating = true })
-hl.bind(mod .. " + ALT + minus", hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%-"), { locked = true, repeating = true })
+hl.bind(mod .. " + ALT + equal", hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%+ && ~/.config/waybar/scripts/statusbar-icon.sh brightness"), { locked = true, repeating = true })
+hl.bind(mod .. " + ALT + plus",  hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%+ && ~/.config/waybar/scripts/statusbar-icon.sh brightness"), { locked = true, repeating = true })
+hl.bind(mod .. " + ALT + minus", hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%- && ~/.config/waybar/scripts/statusbar-icon.sh brightness"), { locked = true, repeating = true })
 
 -- Remap Caps Lock to Esc
 hl.config({

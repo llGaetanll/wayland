@@ -3,44 +3,47 @@
     "position": "top",
     "height": "24",
     "modules-left": [],
-    "modules-right": ["wireplumber", "backlight", "network", "bluetooth", "battery", "clock"],
+    "modules-right": [
+	"custom/volume", "image#volume",
+	"custom/brightness", "image#brightness",
+	"custom/network", "image#network",
+	"custom/bluetooth", "image#bluetooth",
+	"custom/batgen", "image#battery",
+	"clock"
+    ],
+
     "clock": {
 	"format": "{:%a %b %e  %H:%M}"
     },
-    "wireplumber": {
-	"format": "Vol {volume}%",
-	"format-muted": "Vol muted",
-	"scroll-step": 5,
-	"max-volume": 100,
-	"on-click": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
-	"tooltip-format": "{node_name}"
+
+    // --- Pollers: hidden custom modules that regenerate each icon PNG on an
+    //     interval (empty text = invisible). Volume/brightness also refresh
+    //     instantly from the hyprland volume/brightness keybinds. ---
+    "custom/volume":     { "exec": "~/.config/waybar/scripts/statusbar-icon.sh volume",     "interval": 3,  "return-type": "json" },
+    "custom/brightness": { "exec": "~/.config/waybar/scripts/statusbar-icon.sh brightness", "interval": 30, "return-type": "json" },
+    "custom/network":    { "exec": "~/.config/waybar/scripts/statusbar-icon.sh network",    "interval": 8,  "return-type": "json" },
+    "custom/bluetooth":  { "exec": "~/.config/waybar/scripts/statusbar-icon.sh bluetooth",  "interval": 10, "return-type": "json" },
+    "custom/batgen":     { "exec": "~/.config/waybar/scripts/battery-pill.sh",              "interval": 15, "return-type": "json" },
+
+    // --- Display: image modules show the generated PNGs, reloaded on the
+    //     matching RTMIN signal (instant) with a slow interval fallback. ---
+    "image#volume": {
+	"path": "/home/al/.cache/waybar/volume.png", "size": 16, "signal": 9, "interval": 3,
+	"on-click": "sh -c 'wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle && ~/.config/waybar/scripts/statusbar-icon.sh volume'"
     },
-    "backlight": {
-	"format": "Lum {percent}%",
-	"scroll-step": 5,
-	"tooltip": false
+    "image#brightness": {
+	"path": "/home/al/.cache/waybar/brightness.png", "size": 16, "signal": 10, "interval": 10
     },
-    "battery": {
-	"format": "{capacity}%",
-	"states": { "warning": 30, "critical": 15 }
-    },
-    "network": {
-	"format-wifi": "WiFi {signalStrength}%",
-	"format-ethernet": "ETH",
-	"format-disconnected": "WiFi off",
-	"tooltip-format-wifi": "{essid}  ({signalStrength}%)\n{ipaddr}",
-	"tooltip-format-ethernet": "{ifname}\n{ipaddr}",
-	"tooltip-format-disconnected": "Not connected",
+    "image#network": {
+	"path": "/home/al/.cache/waybar/network.png", "size": 16, "signal": 11, "interval": 10,
 	"on-click": "~/.config/waybar/scripts/wifi-menu.sh"
     },
-    "bluetooth": {
-	"format": "BT",
-	"format-off": "BT off",
-	"format-disabled": "BT off",
-	"format-connected": "BT {num_connections}",
-	"tooltip-format": "{controller_alias}\n{status}",
-	"tooltip-format-connected": "{controller_alias}\n{num_connections} connected\n{device_enumerate}",
-	"tooltip-format-enumerate-connected": "{device_alias}",
+    "image#bluetooth": {
+	"path": "/home/al/.cache/waybar/bluetooth.png", "size": 16, "signal": 12, "interval": 10,
 	"on-click": "~/.config/waybar/scripts/bt-menu.sh"
+    },
+    "image#battery": {
+	"path": "/home/al/.cache/waybar/battery.png", "size": 24, "signal": 8, "interval": 15,
+	"on-click": "~/.config/waybar/scripts/battery-pill.sh"
     }
 }

@@ -1,6 +1,6 @@
 * {
     font-family: "Inter", sans-serif;
-    font-size: 12px;
+    font-size: 13px;
     min-height: 0;
 }
 
@@ -10,33 +10,26 @@ window#waybar {
 }
 
 #clock {
-    padding-right: 12px;
+    padding: 0 12px 0 8px;
 }
 
-#battery {
-    padding-right: 8px;
+/* Status icons are PNGs shown by image modules; space them evenly. */
+#image {
+    padding: 0 6px;
 }
 
-#network,
-#bluetooth {
-    padding-right: 12px;
+/* Battery pill is wider than the round icons — tighter side padding. */
+#image.battery {
+    padding: 0 4px;
 }
 
-#wireplumber,
-#backlight {
-    padding-right: 12px;
+/* The hidden generator modules poll state; keep them zero-size. */
+#custom-volume,
+#custom-brightness,
+#custom-network,
+#custom-bluetooth,
+#custom-batgen {
+    padding: 0;
+    margin: 0;
+    min-width: 0;
 }
-
-#wireplumber.muted {
-    color: #888888;
-}
-
-#network.disconnected,
-#bluetooth.off,
-#bluetooth.disabled {
-    color: #888888;
-}
-
-#battery.warning  { color: #febc2e; }
-#battery.critical { color: #ff5f57; }
-
