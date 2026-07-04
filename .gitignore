@@ -13,6 +13,8 @@
 
 !.config/waybar/
 
+!.config/rofi/
+
 # Firefox: track only our userChrome + user.js, not the rest of the dir.
 # (Re-include each parent dir, ignore its contents, then re-include the file.)
 !.config/firefox/
