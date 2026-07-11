@@ -109,9 +109,10 @@ hl.bind("SUPER + mouse:273", hl.dsp.window.resize(), { mouse = true })
 -- without this, plugins (e.g. hyprbars for title bars) are denied.
 hl.permission("/usr/(bin|local/bin)/hyprpm", "plugin", "allow")
 
--- Simple mac-style dock: a second Waybar instance pinned to the bottom.
+-- mac-style dock: an eww window pinned to the bottom (~/.config/eww).
+-- `eww open` auto-starts the daemon if it isn't already running.
 hl.on("hyprland.start", function()
-    hl.exec_cmd("waybar -c /home/al/.config/waybar/dock.jsonc -s /home/al/.config/waybar/dock.css")
+    hl.exec_cmd("eww open dock")
 end)
 
 -- Title bars (hyprbars), mac-style.

@@ -1,0 +1,37 @@
+;; ─── macOS-style dock (minimal) ─────────────────────────────────────────
+;; A row of launcher buttons. Add/remove apps by editing the `dock` widget.
+
+;; Follow the system light/dark preference (defaults to light). Applied as a
+;; CSS class on the dock so eww.scss can style each theme.
+(defpoll theme :interval "5s" :initial "light"
+  `gsettings get org.gnome.desktop.interface color-scheme | grep -qi dark && echo dark || echo light`)
+
+(defwidget applaunch [icon cmd]
+  (button :class "dock-btn"
+          :onclick "${cmd} &"
+    ;; Fixed-size cell (see .dock-cell) with the icon centered inside it, so the
+    ;; icon grows in place — the dock and neighbours never move. The icon is a
+    ;; CSS background-image so its size (and the hover grow) is styled + animated
+    ;; entirely in eww.scss — no per-hover subprocess, so it's instant + smooth.
+    (box :class "dock-cell" :halign "center" :valign "center"
+      (box :class "dock-icon" :halign "center" :valign "center"
+           :style "background-image: url('${icon}');"))))
+
+(defwidget dock []
+  (box :class "dock ${theme}" :space-evenly false :valign "center" :spacing 2
+    (applaunch :cmd "firefox"
+               :icon "/usr/share/icons/hicolor/128x128/apps/firefox.png")
+    (applaunch :cmd "alacritty"
+               :icon "/usr/share/icons/WhiteSur-light/apps/scalable/Alacritty.svg")
+    (applaunch :cmd "nemo"
+               :icon "/usr/share/icons/WhiteSur-light/apps/scalable/nemo.svg")
+    (applaunch :cmd "discord"
+               :icon "/usr/share/icons/WhiteSur-light/apps/scalable/discord.svg")))
+
+(defwindow dock
+  :monitor 0
+  :geometry (geometry :y "0px" :anchor "bottom center")
+  :stacking "overlay"
+  :exclusive false
+  :focusable false
+  (dock))

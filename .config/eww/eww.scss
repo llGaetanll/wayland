@@ -1,0 +1,35 @@
+* { all: unset; }
+
+// Keep the eww window itself transparent (Adwaita paints it otherwise).
+.background { background-color: transparent; }
+
+.dock {
+  border-radius: 18px 18px 0 0;
+  padding: 4px 8px;
+}
+
+// Fixed cell = the icon's max (hover) size, so growing an icon never resizes
+// the dock or nudges its neighbours.
+.dock-cell {
+  min-width: 62px;    // = hover size, so the grow stays inside the cell
+  min-height: 62px;
+}
+
+// The icon itself, drawn as a scalable background-image. Growing min-width/height
+// on hover is CSS-animatable, so the grow is smooth (unlike the image widget).
+.dock-icon {
+  min-width: 52px;
+  min-height: 52px;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  transition: min-width 150ms ease, min-height 150ms ease;
+}
+.dock-btn:hover .dock-icon {
+  min-width: 62px;
+  min-height: 62px;
+}
+
+// Theme background — chosen by the `theme` class (follows the system).
+.dock.light { background-color: rgba(255, 255, 255, 0.45); }
+.dock.dark  { background-color: rgba(40, 40, 40, 0.45); }
