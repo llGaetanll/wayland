@@ -49,7 +49,7 @@ inputbar {
 entry {
     font:              "Inter 20";
     text-color:        @fg;
-    placeholder:       "Spotlight Search";
+    placeholder:       "Program Search";
     placeholder-color: @muted;
     cursor:            text;
     vertical-align:    0.5;
@@ -57,7 +57,11 @@ entry {
 
 /* --- results --- */
 listview {
-    /* Shrink the window to the number of results (mac-like), up to 8 rows. */
+    /* Resize the box to the number of matches (up to `lines` rows), mac-style.
+       This changes the layer-surface size on every keystroke; the resize looks
+       clean only because Hyprland is told not to animate the rofi layer
+       (no_anim = true on the layer_rule in hyprland.lua). Without that, the
+       per-keystroke resize animates into a "morphing/bending text" effect. */
     dynamic:      true;
     fixed-height: false;
     lines:        8;

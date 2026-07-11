@@ -1,0 +1,109 @@
+/*
+ * macOS menu-bar-dropdown theme for rofi.
+ *
+ * Used by the Wi-Fi / Bluetooth status-icon menus (waybar/scripts/{wifi,bt}-menu.sh).
+ * Unlike spotlight.rasi (centred launcher) this anchors to the TOP-RIGHT, just
+ * under the top bar, so a click on a status icon reads as a submenu dropping out
+ * of the menu bar rather than a popup in the middle of the screen.
+ *
+ * Palette is kept in sync with spotlight.rasi / waybar dock so the launcher,
+ * dock, titlebars and these menus all read as one system. The frosted look
+ * comes from the `rofi-blur` layerrule in hyprland.lua (namespace ^rofi$).
+ */
+
+* {
+    /* --- palette (keep in sync with spotlight.rasi + waybar/dock.css) --- */
+    bg:      rgba(40, 40, 40, 0.85);   /* window fill */
+    fg:      #ffffff;                  /* primary text */
+    muted:   rgba(235, 235, 235, 0.55);/* header / secondary */
+    sel:     rgba(255, 255, 255, 0.14);/* selected row */
+    sep:     rgba(255, 255, 255, 0.08);/* divider under the header */
+
+    background-color: transparent;
+    text-color:       @fg;
+}
+
+window {
+    /* Top-right corner of the panel pinned near the top-right of the screen,
+       nudged down below the 24px top bar. x-offset trims it off the right edge
+       so it sits under the status-icon cluster. */
+    location:  northeast;
+    anchor:    northeast;
+    x-offset:  -6px;
+    y-offset:  30px;
+    width:     300px;
+
+    background-color: @bg;
+    border-radius:    12px;
+    padding:          6px;
+}
+
+mainbox {
+    children: [ inputbar, listview ];
+    spacing:  0;
+    padding:  0;
+}
+
+/* --- header row: the prompt ("Wi-Fi" / "Bluetooth") acts as the title. The
+       entry stays present (so type-to-filter still works) but slim + subtle. --- */
+inputbar {
+    children: [ prompt, entry ];
+    padding:  6px 10px 8px 10px;
+    spacing:  8px;
+    border:       0px 0px 1px 0px;   /* divider under the header */
+    border-color: @sep;
+}
+
+prompt {
+    font:        "Inter Semibold 13";
+    text-color:  @fg;
+    vertical-align: 0.5;
+}
+
+entry {
+    font:              "Inter 12";
+    text-color:        @fg;
+    placeholder:       "";
+    placeholder-color: @muted;
+    cursor:            text;
+    vertical-align:    0.5;
+}
+
+/* --- results --- */
+listview {
+    dynamic:      true;
+    fixed-height: false;
+    lines:        9;
+    columns:      1;
+    scrollbar:    false;
+
+    padding:  6px 0px 2px 0px;
+    spacing:  1px;
+}
+
+element {
+    children:      [ element-text ];
+    padding:       7px 10px;
+    spacing:       0;
+    border-radius: 7px;
+}
+
+element normal.normal,
+element alternate.normal {
+    background-color: transparent;
+    text-color:       @fg;
+}
+
+element selected.normal {
+    background-color: @sel;
+    text-color:       @fg;
+}
+
+element-text {
+    font:            "Inter 13";
+    vertical-align:  0.5;
+    text-color:      inherit;
+    background-color: transparent;
+    /* rows carry pango markup (monospace signal bars); allow it. */
+    markup:          true;
+}
