@@ -1,18 +1,18 @@
 /*
  * macOS menu-bar-dropdown theme for rofi.
  *
- * Used by the Wi-Fi / Bluetooth status-icon menus (waybar/scripts/{wifi,bt}-menu.sh).
- * Unlike spotlight.rasi (centred launcher) this anchors to the TOP-RIGHT, just
- * under the top bar, so a click on a status icon reads as a submenu dropping out
- * of the menu bar rather than a popup in the middle of the screen.
+ * Used by the eww Wi-Fi password prompt (eww/scripts/wifi-action.sh). Unlike
+ * spotlight.rasi (centred launcher) this anchors to the TOP-RIGHT, just under
+ * the top bar, so it reads as a submenu dropping out of the menu bar rather
+ * than a popup in the middle of the screen.
  *
- * Palette is kept in sync with spotlight.rasi / waybar dock so the launcher,
+ * Palette is kept in sync with spotlight.rasi / the eww dock so the launcher,
  * dock, titlebars and these menus all read as one system. The frosted look
  * comes from the `rofi-blur` layerrule in hyprland.lua (namespace ^rofi$).
  */
 
 * {
-    /* --- palette (keep in sync with spotlight.rasi + waybar/dock.css) --- */
+    /* --- palette (keep in sync with spotlight.rasi + eww/eww.scss) --- */
     bg:      rgba(40, 40, 40, 0.85);   /* window fill */
     fg:      #ffffff;                  /* primary text */
     muted:   rgba(235, 235, 235, 0.55);/* header / secondary */

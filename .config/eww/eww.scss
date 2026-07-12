@@ -33,3 +33,158 @@
 // Theme background — chosen by the `theme` class (follows the system).
 .dock.light { background-color: rgba(255, 255, 255, 0.45); }
 .dock.dark  { background-color: rgba(40, 40, 40, 0.45); }
+
+.bar {
+  padding: 0 12px;
+  font-family: "Inter", sans-serif;
+  font-size: 13px;
+}
+.bar-clock { font-weight: 500; }
+
+.status-icon {
+  min-width: 16px;
+  min-height: 16px;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+
+.batt-icon {
+  min-width: 26px;
+  min-height: 15px;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+
+.sicon:hover { opacity: 0.6; }
+
+
+.backdrop { background-color: transparent; }
+
+.menu {
+  border-radius: 12px;
+  padding: 8px;
+  font-family: "Inter", sans-serif;
+  font-size: 13px;
+
+  &.light { background-color: rgba(244, 244, 246, 0.7); color: #000000; }
+  &.dark  { background-color: rgba(38, 38, 40, 0.7);    color: #ffffff; }
+}
+
+.menu-head { padding: 4px 8px 6px 8px; }
+.menu-title { font-weight: 600; font-size: 14px; }
+.menu-sub {
+  font-size: 11px;
+  .menu.light & { color: rgba(0, 0, 0, 0.5); }
+  .menu.dark  & { color: rgba(255, 255, 255, 0.5); }
+}
+.row-connecting {
+  font-size: 11px;
+  .menu.light & { color: rgba(0, 0, 0, 0.5); }
+  .menu.dark  & { color: rgba(255, 255, 255, 0.5); }
+}
+
+.sep {
+  min-height: 1px;
+  margin: 2px 6px;
+  .menu.light & { background-color: rgba(0, 0, 0, 0.10); }
+  .menu.dark  & { background-color: rgba(255, 255, 255, 0.12); }
+}
+
+// Rows
+.row {
+  padding: 7px 8px;
+  border-radius: 7px;
+}
+.row:hover {
+  .menu.light & { background-color: rgba(0, 0, 0, 0.07); }
+  .menu.dark  & { background-color: rgba(255, 255, 255, 0.10); }
+}
+.row-check {
+  min-width: 16px;
+  font-weight: 700;
+  color: #0a84ff;            // macOS blue checkmark
+}
+.row-icon {
+  min-width: 18px;
+  min-height: 18px;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+.row-name { }
+.foot { color: rgba(0, 0, 0, 0.55); }
+.menu.dark .foot { color: rgba(255, 255, 255, 0.55); }
+
+// ─── Bare iOS-style slider popups (volume / brightness) ─────────────────────
+// The whole popup IS the slider — no card. Track + fill are translucent white
+// (the same tone as the bar/dock module bg); the Hyprland blur frosts them.
+// Taller + shorter + small radius, with a hidden thumb so the fill is the bar.
+// Visual: fixed-size rounded box; the gradient (set inline per value) is clipped
+// to these corners by GTK, so the fill is rounded at both ends and never
+// squishes (the box never resizes). Radius matches the other menus (12px).
+.islider-bg {
+  min-height: 51px;
+  border-radius: 12px;
+}
+
+// Transparent scale stacked on top — purely for drag/scroll input. margin:0 on
+// the scale + trough and a zero-size slider make the trough span the FULL width,
+// so dragging to the far right reaches exactly 100 (otherwise GTK reserves
+// slider space at the ends and the max drag lands a few % short → a gap).
+.islider-input {
+  margin: 0;
+  padding: 0;
+  trough {
+    min-height: 51px;
+    border-radius: 12px;
+    background-color: transparent;
+    margin: 0;
+    padding: 0;
+  }
+  highlight { background-color: transparent; }
+  slider {
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+    min-height: 0;
+  }
+}
+// Icon overlaid inside the slider, inset from the left edge.
+.islider-icon {
+  min-width: 18px;
+  min-height: 18px;
+  margin-left: 12px;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+
+// iOS-style on/off switch. The pill lives on an inner box (.sw), not the button
+// (.sw-btn) — a button stretches to the tall two-line header, a box with valign
+// center holds its 22px height.
+.sw-btn { background-color: transparent; }
+.sw {
+  min-width: 38px;
+  min-height: 22px;
+  border-radius: 11px;
+  padding: 2px;
+  transition: background-color 150ms ease;
+  &.on  { background-color: #34c759; }             // green
+  &.off { background-color: rgba(120, 120, 128, 0.32); }
+}
+.sw-knob {
+  min-width: 18px;
+  min-height: 18px;
+  border-radius: 9px;
+  background-color: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+// Same translucent fills as the dock so the two match.
+.bar.light { background-color: rgba(255, 255, 255, 0.45); color: #000000; }
+.bar.dark  { background-color: rgba(40, 40, 40, 0.45);   color: #ffffff; }

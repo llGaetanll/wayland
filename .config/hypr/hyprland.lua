@@ -14,17 +14,29 @@ hl.bind(mod .. " + W", hl.dsp.exec_cmd(browser))
 -- layer surface (namespace "rofi"), so the float-all window rule doesn't touch
 -- it; the layer_rule below frosts the translucent background instead.
 hl.bind(mod .. " + Space", hl.dsp.exec_cmd("rofi -show drun"))
-hl.layer_rule({ name = "rofi-blur", match = { namespace = "^rofi$" }, blur = true, ignore_alpha = 0.5 })
+-- no_anim: rofi resizes its layer surface on every keystroke (dynamic list).
+-- Letting Hyprland animate that resize produces a "morphing/bending text"
+-- effect, so animation is disabled for this layer — resizes snap instantly.
+-- Trade-off: no fade-in on open either (the launcher just appears).
+hl.layer_rule({ name = "rofi-blur", match = { namespace = "^rofi$" }, blur = true, ignore_alpha = 0.5, no_anim = true })
+
+-- Blur eww surfaces (bar, dock, menus) — they share the gtk-layer-shell layer
+-- namespace. The full-screen menu backdrop is deliberately given its OWN
+-- namespace ("eww-backdrop", see eww.yuck) so it is EXCLUDED here: blurring a
+-- 1920x1200 surface every frame near-locks the machine.
+hl.layer_rule({ name = "eww-blur", match = { namespace = "^gtk-layer-shell$" }, blur = true, ignore_alpha = 0.2 })
 
 -- Volume: SUPER +/-  (locked = works on lockscreen, repeating = holds to ramp)
-hl.bind(mod .. " + equal", hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+ && ~/.config/waybar/scripts/statusbar-icon.sh volume"), { locked = true, repeating = true })
-hl.bind(mod .. " + plus",  hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+ && ~/.config/waybar/scripts/statusbar-icon.sh volume"), { locked = true, repeating = true })
-hl.bind(mod .. " + minus", hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- && ~/.config/waybar/scripts/statusbar-icon.sh volume"),       { locked = true, repeating = true })
+-- The eww bar polls its volume icon every 2s (see eww.yuck), so the change is
+-- reflected there on its own — no need to signal the bar from the keybind.
+hl.bind(mod .. " + equal", hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"), { locked = true, repeating = true })
+hl.bind(mod .. " + plus",  hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"), { locked = true, repeating = true })
+hl.bind(mod .. " + minus", hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"),       { locked = true, repeating = true })
 
--- Brightness: SUPER + ALT +/-  (needs brightnessctl)
-hl.bind(mod .. " + ALT + equal", hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%+ && ~/.config/waybar/scripts/statusbar-icon.sh brightness"), { locked = true, repeating = true })
-hl.bind(mod .. " + ALT + plus",  hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%+ && ~/.config/waybar/scripts/statusbar-icon.sh brightness"), { locked = true, repeating = true })
-hl.bind(mod .. " + ALT + minus", hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%- && ~/.config/waybar/scripts/statusbar-icon.sh brightness"), { locked = true, repeating = true })
+-- Brightness: SUPER + ALT +/-  (needs brightnessctl; eww polls its icon too)
+hl.bind(mod .. " + ALT + equal", hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%+"), { locked = true, repeating = true })
+hl.bind(mod .. " + ALT + plus",  hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%+"), { locked = true, repeating = true })
+hl.bind(mod .. " + ALT + minus", hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%-"), { locked = true, repeating = true })
 
 -- Remap Caps Lock to Esc
 hl.config({
@@ -49,8 +61,9 @@ hl.on("hyprland.start", function() hl.exec_cmd("pipewire") end)
 hl.on("hyprland.start", function() hl.exec_cmd("wireplumber") end)
 hl.on("hyprland.start", function() hl.exec_cmd("pipewire-pulse") end)
 
--- Top Bar
-hl.on("hyprland.start", function() hl.exec_cmd("waybar") end)
+-- Top Bar: eww window (~/.config/eww), matching the eww dock. `eww open`
+-- auto-starts the daemon if it isn't already running.
+hl.on("hyprland.start", function() hl.exec_cmd("eww open bar") end)
 
 -- Animation Curves
 hl.curve("smooth", { type = "bezier", points = {{0.25, 0.1}, {0.25, 1.0}} })

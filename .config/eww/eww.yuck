@@ -35,3 +35,223 @@
   :exclusive false
   :focusable false
   (dock))
+
+;; ─── macOS-style top bar (minimal first pass) ───────────────────────────────
+;; Just a right-aligned clock for now; status icons + app menu come later. Shares
+;; the same light/dark `theme` var as the dock so both read as one system.
+
+(defpoll clock :interval "20s" `date '+%a %b %e  %H:%M'`)
+
+;; Status icons: each poll echoes the path of the icon matching the current
+;; state; the widget shows it via CSS background-image (like the dock icons), so
+;; it reloads whenever the path changes. Volume/brightness poll fast so keybind
+;; changes show up quickly; net/bt/battery change rarely so they poll slower.
+(defpoll vol_icon  :interval "2s"  `~/.config/eww/scripts/status.sh volume`)
+(defpoll bri_icon  :interval "3s"  `~/.config/eww/scripts/status.sh brightness`)
+(defpoll net_icon  :interval "6s"  `~/.config/eww/scripts/status.sh network`)
+(defpoll bt_icon   :interval "6s"  `~/.config/eww/scripts/status.sh bluetooth`)
+(defpoll batt_icon :interval "15s" `~/.config/eww/scripts/battery.sh`)
+
+(defwidget statusicons []
+  (box :class "status" :space-evenly false :valign "center" :spacing 8
+    (button :class "sicon" :onclick "~/.config/eww/scripts/menu-toggle.sh volume"
+      (box :class "status-icon" :style "background-image: url('${vol_icon}');"))
+    (button :class "sicon" :onclick "~/.config/eww/scripts/menu-toggle.sh brightness"
+      (box :class "status-icon" :style "background-image: url('${bri_icon}');"))
+    (button :class "sicon" :onclick "~/.config/eww/scripts/menu-toggle.sh wifi"
+      (box :class "status-icon" :style "background-image: url('${net_icon}');"))
+    (button :class "sicon" :onclick "~/.config/eww/scripts/menu-toggle.sh bt"
+      (box :class "status-icon" :style "background-image: url('${bt_icon}');"))
+    (box :class "batt-icon" :style "background-image: url('${batt_icon}');")))
+
+(defwidget bar []
+  (centerbox :class "bar ${theme}"
+    (box)                                   ;; left  — reserved for the app menu
+    (box)                                   ;; center
+    (box :halign "end" :space-evenly false :spacing 12
+      (statusicons)
+      (label :class "bar-clock" :text clock))))
+
+;; ─── Wi-Fi dropdown ─────────────────────────────────────────────────────────
+;; A macOS-style menu-bar dropdown. The poll only runs while the menu is open
+;; (:run-while), gated by wifi_open which menu-toggle.sh flips.
+(defvar wifi_open false)
+(defpoll wifi :interval "5s" :run-while wifi_open
+  :initial `{"enabled":true,"networks":[],"list_h":40}`
+  `~/.config/eww/scripts/wifi-list.sh`)
+
+;; wifi_connecting holds the SSID currently being joined, so its row can show a
+;; "Connecting…" indicator. wifi-action.sh sets it before the blocking nmcli call.
+(defvar wifi_connecting "")
+
+(defwidget wifi-panel []
+  (box :class "menu ${theme}" :orientation "vertical" :space-evenly false
+    ;; header: title + connected-network subtitle + on/off switch
+    (box :class "menu-head" :space-evenly false :valign "center"
+      (box :orientation "vertical" :space-evenly false :halign "start" :hexpand true
+        (label :class "menu-title" :text "Wi-Fi" :halign "start")
+        (label :class "menu-sub" :halign "start" :limit-width 26 :show-truncated true
+               :text {wifi.enabled ? (wifi.connected != "" ? wifi.connected : "Not connected") : "Off"}))
+      (button :class "sw-btn" :valign "center"
+              :onclick "~/.config/eww/scripts/wifi-action.sh toggle"
+        (box :class "sw ${wifi.enabled ? 'on' : 'off'}" :valign "center" :vexpand false
+          (box :class "sw-knob" :valign "center" :halign {wifi.enabled ? "end" : "start"}))))
+    (box :class "sep")
+    ;; network list. eventbox :cursor keeps the normal pointer during scroll
+    ;; (scroll/button can't set a cursor; a bare scroll shows GTK's box-dot cursor).
+    (scroll :class "menu-scroll" :vscroll true :height {wifi.list_h}
+      (eventbox :cursor "default"
+        (box :orientation "vertical" :space-evenly false :valign "start"
+          (for n in {wifi.networks}
+            (button :class "row" :onclick "~/.config/eww/scripts/wifi-action.sh connect ${n.ssid_b64}"
+              (box :space-evenly false :spacing 8 :valign "center"
+                (label :class "row-check" :text {n.active ? "✓" : ""})
+                (label :class "row-name" :text {n.ssid} :halign "start" :hexpand true
+                       :limit-width 24 :show-truncated true)
+                (label :class "row-connecting" :text "Connecting…"
+                       :visible {n.ssid == wifi_connecting})
+                (box :class "row-icon" :style "background-image: url('${n.icon}');")))))))))
+
+;; focusable false is REQUIRED here: focusable true grabs keyboard focus and
+;; breaks the click-outside backdrop (verified). So Esc can't come from eww's
+;; onkeypressed (that needs focus) — it's handled by a dynamic Hyprland keybind
+;; that only exists while the menu is open (see menu-toggle.sh).
+(defwindow wifi-menu
+  :monitor 0
+  :geometry (geometry :anchor "top right" :x "8px" :y "4px" :width "320px")
+  :stacking "overlay"
+  :focusable false
+  (wifi-panel))
+
+;; Full-screen click-catcher: eww windows don't close on focus loss, so clicking
+;; outside the menu lands here and dismisses it. It's a `button` (not a
+;; transparent eventbox) because a button is a real widget with a solid input
+;; region — a transparent eventbox has no input region and clicks fall through.
+;; Distinct :namespace so the Hyprland blur rule (which matches gtk-layer-shell)
+;; does NOT blur this full-screen surface — blurring 1920x1200 every frame
+;; near-locked the machine last time. bar/dock/menu keep the default namespace.
+(defwindow wifi-backdrop
+  :monitor 0
+  :geometry (geometry :width "100%" :height "100%" :anchor "center")
+  :stacking "overlay"
+  :focusable false
+  :namespace "eww-backdrop"
+  (button :class "backdrop" :onclick "~/.config/eww/scripts/menu-toggle.sh wifi"
+          :hexpand true :vexpand true))
+
+;; ─── Bluetooth dropdown ─────────────────────────────────────────────────────
+;; Same pattern as Wi-Fi. A device click toggles its connection (does NOT close
+;; the menu — you watch the status update in place). bt_connecting holds the MAC
+;; being (dis)connected so its row can show "Connecting…".
+(defvar bt_open false)
+(defpoll bt :interval "5s" :run-while bt_open
+  :initial `{"enabled":true,"devices":[],"list_h":40,"connected":""}`
+  `~/.config/eww/scripts/bt-list.sh`)
+(defvar bt_connecting "")
+
+(defwidget bt-panel []
+  (box :class "menu ${theme}" :orientation "vertical" :space-evenly false
+    (box :class "menu-head" :space-evenly false :valign "center"
+      (box :orientation "vertical" :space-evenly false :halign "start" :hexpand true
+        (label :class "menu-title" :text "Bluetooth" :halign "start")
+        (label :class "menu-sub" :halign "start" :limit-width 26 :show-truncated true
+               :text {bt.enabled ? (bt.connected != "" ? bt.connected : "On") : "Off"}))
+      (button :class "sw-btn" :valign "center"
+              :onclick "~/.config/eww/scripts/bt-action.sh toggle"
+        (box :class "sw ${bt.enabled ? 'on' : 'off'}" :valign "center" :vexpand false
+          (box :class "sw-knob" :valign "center" :halign {bt.enabled ? "end" : "start"}))))
+    (box :class "sep")
+    (scroll :class "menu-scroll" :vscroll true :height {bt.list_h}
+      (eventbox :cursor "default"
+        (box :orientation "vertical" :space-evenly false :valign "start"
+          (for d in {bt.devices}
+            (button :class "row" :onclick "~/.config/eww/scripts/bt-action.sh connect ${d.mac_b64}"
+              (box :space-evenly false :spacing 8 :valign "center"
+                (label :class "row-check" :text {d.connected ? "✓" : ""})
+                (label :class "row-name" :text {d.name} :halign "start" :hexpand true
+                       :limit-width 26 :show-truncated true)
+                (label :class "row-connecting" :text "Connecting…"
+                       :visible {d.mac == bt_connecting})))))))))
+
+(defwindow bt-menu
+  :monitor 0
+  :geometry (geometry :anchor "top right" :x "8px" :y "4px" :width "320px")
+  :stacking "overlay"
+  :focusable false
+  (bt-panel))
+
+(defwindow bt-backdrop
+  :monitor 0
+  :geometry (geometry :width "100%" :height "100%" :anchor "center")
+  :stacking "overlay"
+  :focusable false
+  :namespace "eww-backdrop"
+  (button :class "backdrop" :onclick "~/.config/eww/scripts/menu-toggle.sh bt"
+          :hexpand true :vexpand true))
+
+;; ─── Volume / brightness slider popups (independent) ────────────────────────
+;; Each is just a bare iOS-style slider (no card, no label) with the icon
+;; overlaid inside the left. Opened from its own bar icon; values poll only while
+;; that popup is open.
+(defvar volume_open false)
+(defvar brightness_open false)
+(defpoll vol_pct :interval "2s" :run-while volume_open :initial "0"
+  `~/.config/eww/scripts/controls.sh get-volume`)
+(defpoll bri_pct :interval "2s" :run-while brightness_open :initial "0"
+  `~/.config/eww/scripts/controls.sh get-brightness`)
+
+;; The visual is a fixed-size rounded box whose background is a linear-gradient:
+;; fill up to the value, track after. GTK3 clips a widget's own background to its
+;; border-radius, so the fill follows the rounded corners at BOTH ends at every
+;; value — no squish (the box never changes size), and 100% is properly rounded.
+;; A transparent scale on top handles drag input; its onchange updates the value
+;; var immediately so the gradient tracks the drag live.
+(defwidget vol-slider []
+  (overlay
+    (box :class "islider-bg" :hexpand true
+         :style "background-image: linear-gradient(to right, rgba(255,255,255,0.45) ${vol_pct}%, rgba(255,255,255,0.2) ${vol_pct}%);")
+    (box :class "islider-icon" :halign "start" :valign "center"
+         :style "background-image: url('${vol_icon}');")
+    (scale :class "islider-input" :hexpand true :value vol_pct :min 0 :max 100 :round-digits 0
+           :onchange "eww update vol_pct={} && ~/.config/eww/scripts/controls.sh set-volume {}")))
+
+(defwidget bri-slider []
+  (overlay
+    (box :class "islider-bg" :hexpand true
+         :style "background-image: linear-gradient(to right, rgba(255,255,255,0.45) ${bri_pct}%, rgba(255,255,255,0.2) ${bri_pct}%);")
+    (box :class "islider-icon" :halign "start" :valign "center"
+         :style "background-image: url('${bri_icon}');")
+    (scale :class "islider-input" :hexpand true :value bri_pct :min 1 :max 100 :round-digits 0
+           :onchange "eww update bri_pct={} && ~/.config/eww/scripts/controls.sh set-brightness {}")))
+
+(defwindow volume-menu
+  :monitor 0 :geometry (geometry :anchor "top right" :x "8px" :y "4px" :width "260px")
+  :stacking "overlay" :focusable false
+  (vol-slider))
+
+(defwindow volume-backdrop
+  :monitor 0 :geometry (geometry :width "100%" :height "100%" :anchor "center")
+  :stacking "overlay" :focusable false :namespace "eww-backdrop"
+  (button :class "backdrop" :onclick "~/.config/eww/scripts/menu-toggle.sh volume"
+          :hexpand true :vexpand true))
+
+(defwindow brightness-menu
+  :monitor 0 :geometry (geometry :anchor "top right" :x "8px" :y "4px" :width "260px")
+  :stacking "overlay" :focusable false
+  (bri-slider))
+
+(defwindow brightness-backdrop
+  :monitor 0 :geometry (geometry :width "100%" :height "100%" :anchor "center")
+  :stacking "overlay" :focusable false :namespace "eww-backdrop"
+  (button :class "backdrop" :onclick "~/.config/eww/scripts/menu-toggle.sh brightness"
+          :hexpand true :vexpand true))
+
+;; :exclusive true reserves the 24px strip (windows tile below it), which also
+;; keeps sync-bars.sh's reserved-area "is it shown" check valid.
+(defwindow bar
+  :monitor 0
+  :geometry (geometry :x "0px" :y "0px" :width "100%" :height "24px" :anchor "top center")
+  :stacking "overlay"
+  :exclusive true
+  :focusable false
+  (bar))

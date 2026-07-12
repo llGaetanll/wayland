@@ -1,8 +1,8 @@
 /*
  * macOS Spotlight–style theme for rofi.
  *
- * Palette is deliberately the same as the Waybar dock
- * (~/.config/waybar/dock.css): rgba(40,40,40,0.85) fill, white text, Inter.
+ * Palette is deliberately the same as the eww dock
+ * (~/.config/eww/eww.scss): rgba(40,40,40,0.85) fill, white text, Inter.
  * That way the launcher, dock, and titlebars all read as one system.
  *
  * The translucency only looks "frosted" if the compositor blurs the surface
@@ -10,7 +10,7 @@
  */
 
 * {
-    /* --- palette (keep in sync with waybar/dock.css) --- */
+    /* --- palette (keep in sync with eww/eww.scss) --- */
     bg:      rgba(40, 40, 40, 0.85);   /* window fill */
     fg:      #ffffff;                  /* primary text */
     muted:   rgba(235, 235, 235, 0.55);/* placeholder / secondary */
