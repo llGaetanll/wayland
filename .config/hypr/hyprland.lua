@@ -38,6 +38,12 @@ hl.bind(mod .. " + ALT + equal", hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%+"
 hl.bind(mod .. " + ALT + plus",  hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%+"), { locked = true, repeating = true })
 hl.bind(mod .. " + ALT + minus", hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%-"), { locked = true, repeating = true })
 
+-- Screenshot: Print (the PrtSc key) → slurp crosshair region-select → grim capture
+-- → an eww preview menu (top-right) with Copy / Save actions. SUPER+SHIFT+S is a
+-- convenient alias (macOS uses SHIFT+CMD-family combos). See screenshot.sh.
+hl.bind("Print",               hl.dsp.exec_cmd("/home/al/.config/eww/scripts/screenshot.sh"))
+hl.bind(mod .. " + SHIFT + S", hl.dsp.exec_cmd("/home/al/.config/eww/scripts/screenshot.sh"))
+
 -- Remap Caps Lock to Esc
 hl.config({
     input = {

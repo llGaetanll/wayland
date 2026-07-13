@@ -185,6 +185,30 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
+// ─── Screenshot preview menu ────────────────────────────────────────────────
+// Reuses the .menu card (rounded, translucent, blurred). The shot itself is a
+// rounded box background-image (same idiom as the dock/status icons), sized by
+// screenshot.sh to the captured aspect ratio so it never distorts.
+.shot { padding: 10px; }
+.shot-preview {
+  border-radius: 8px;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+}
+.shot-actions { margin-top: 2px; }
+.shot-btn {
+  padding: 6px 0;
+  border-radius: 7px;
+  font-weight: 500;
+}
+// Per-theme base fill + hover (matches the .row treatment). All buttons share
+// the same neutral fill — no accent-colored primary.
+.menu.light .shot-btn { background-color: rgba(0, 0, 0, 0.06); }
+.menu.dark  .shot-btn { background-color: rgba(255, 255, 255, 0.10); }
+.menu.light .shot-btn:hover { background-color: rgba(0, 0, 0, 0.12); }
+.menu.dark  .shot-btn:hover { background-color: rgba(255, 255, 255, 0.16); }
+
 // Same translucent fills as the dock so the two match.
 .bar.light { background-color: rgba(255, 255, 255, 0.45); color: #000000; }
 .bar.dark  { background-color: rgba(40, 40, 40, 0.45);   color: #ffffff; }
