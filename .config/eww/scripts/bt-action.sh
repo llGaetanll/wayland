@@ -40,11 +40,14 @@ case "${1:-}" in
         log "disconnect $mac"; bluetoothctl disconnect "$mac" >>"$LOG" 2>&1
         notify "Disconnected"
     else
-        paired=$(bluetoothctl info "$mac" 2>/dev/null | awk '/Paired:/{print $2}')
-        if [ "$paired" != yes ]; then
-            bluetoothctl --timeout 20 scan on >/dev/null 2>&1 &
-            sleep 2; log "pair $mac"; bluetoothctl pair "$mac" >>"$LOG" 2>&1 || log "pair non-zero"
-        fi
+        # Every device shown in this menu is already known (it comes from the
+        # paired/bonded/trusted/connected lists — see bt-list.sh), so a plain
+        # `connect` is all that's needed: BlueZ completes any missing pairing
+        # itself (it flips Paired no->yes on connect). We deliberately do NOT
+        # start a discovery scan or force an explicit `pair` first — a device
+        # that isn't in pairing mode makes `pair` fail, and connecting while a
+        # scan is active is unreliable; that combination is what made this hang
+        # and never connect. `trust` first so it auto-reconnects next time.
         bluetoothctl trust "$mac" >>"$LOG" 2>&1 || true
         log "connect $mac"
         if bluetoothctl connect "$mac" >>"$LOG" 2>&1; then notify "Connected"; else notify "Failed to connect"; fi
