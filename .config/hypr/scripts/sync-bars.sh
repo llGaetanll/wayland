@@ -1,20 +1,23 @@
 #!/bin/sh
-# Show/hide the top bar (waybar) and the dock (eww) to match the FOCUSED
+# Show/hide the top bar (eww) and the dock (eww) to match the FOCUSED
 # workspace: hide them when that workspace holds a window we sent to a fullscreen
 # "Space" (macOS hides the menu bar + dock on a fullscreen Space), show otherwise.
 #
-# We key on the per-window state files written by mac-fullscreen.sh (named after
-# the window address), NOT on the window's maximize state — so an ordinary
-# double-click-maximize on your desktop keeps the bars, only a Space hides them.
+# We key on the FOCUSED workspace's live fullscreen state: hide if it holds a
+# full-screen window. In this setup every full-screen window is whisked onto its
+# own Space by the window.fullscreen handler in hyprland.lua, so that test is
+# exactly "a Space is focused" — and, being live state rather than a file the
+# handler writes later, it's true the INSTANT you go full-screen, so the bars can
+# hide immediately instead of waiting for the debounce/move.
 #
 # Called from hyprland.lua on window.fullscreen / workspace.active / window.close,
 # and directly from mac-fullscreen.sh, so the bars track fullscreening, swiping
 # between Spaces, and closing a fullscreen app.
 #
-# The top bar (waybar) only toggles on SIGUSR1 (no absolute show/hide), so we
-# read the monitor's reserved area as the source of truth for "is it shown" and
-# it can never drift. The dock (eww) has absolute `eww open/close dock`, driven
-# on the same transitions so both stay in lockstep. A lock + short settle
+# Both bars are now eww windows with absolute `eww open/close`. The top bar is
+# :exclusive so it reserves space; we read the monitor's reserved area as the
+# source of truth for "is it shown" and it can never drift. Both are driven on
+# the same transitions so they stay in lockstep. A lock + short settle
 # serialises back-to-back events.
 
 runtime="${XDG_RUNTIME_DIR:-/tmp}/mac-fs"
@@ -26,34 +29,30 @@ wsid=$(hyprctl activeworkspace -j | jq -r '.id')
 [ -n "$wsid" ] && [ "$wsid" != "null" ] || exit 0
 
 clients=$(hyprctl clients -j)
-onws=$(printf '%s' "$clients" | jq -r --argjson w "$wsid" '.[]|select(.workspace.id==$w)|.address')
 alladdr=$(printf '%s' "$clients" | jq -r '.[].address')
 
-# Should the bars be hidden? -> a tracked Space window lives on the focused
-# workspace. Also prune state files whose window has since closed (self-heal).
-want_hidden=false
+# Should the bars be hidden? -> the focused workspace holds a full-screen window.
+want_hidden=$(printf '%s' "$clients" | jq -r --argjson w "$wsid" 'any(.[]; .workspace.id == $w and .fullscreen != 0)')
+
+# Self-heal: prune origin files whose window has since closed. The bars no longer
+# depend on these files (they exist only for the close path in mac-fullscreen.sh),
+# but pruning here keeps the dir from accumulating orphans over a long session.
 for f in "$runtime"/0x*; do
     [ -e "$f" ] || continue
     a=${f##*/}
-    case "$alladdr" in
-        *"$a"*) ;;                       # window still exists
-        *) rm -f "$f"; continue ;;       # stale -> prune
-    esac
-    case "$onws" in
-        *"$a"*) want_hidden=true ;;
-    esac
+    case "$alladdr" in *"$a"*) ;; *) rm -f "$f" ;; esac
 done
 
-# Are the bars currently shown? -> the top bar (waybar) is reserving space. (The
-# eww dock is non-exclusive and never reserves, so it follows the top bar here.)
+# Are the bars currently shown? -> the top bar (eww, :exclusive) is reserving
+# space. (The eww dock is non-exclusive and never reserves, so it follows here.)
 shown=$(hyprctl monitors -j | jq '.[0].reserved | map(. > 0) | any')
 
 if [ "$want_hidden" = "true" ] && [ "$shown" = "true" ]; then
-    pkill -USR1 -x waybar        # hide top bar
+    eww close bar 2>/dev/null    # hide top bar
     eww close dock 2>/dev/null   # hide dock
     sleep 0.25                   # let the reserved area settle before the lock frees
 elif [ "$want_hidden" = "false" ] && [ "$shown" = "false" ]; then
-    pkill -USR1 -x waybar        # show top bar
+    eww open bar 2>/dev/null     # show top bar
     eww open dock 2>/dev/null    # show dock
     sleep 0.25
 fi
