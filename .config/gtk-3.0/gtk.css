@@ -1,0 +1,136 @@
+/* ============================================================================
+ * Custom Nemo styling — macOS Finder look, hand-rolled.
+ *
+ * Loaded by GTK3 automatically on top of the base theme (Adwaita, set in
+ * settings.ini). EVERY rule is scoped under `.nemo-window` so that no other
+ * GTK3 app on the system is affected — this file is global by default, so the
+ * scoping is deliberate. Selectors verified against Nemo 6.6's own style
+ * classes (primary-toolbar, nemo-window, nemo-*-sidebar, etc.).
+ *
+ * This is a starting point that emulates Finder; it's ours to diverge from.
+ * ========================================================================== */
+
+/* --- Palette (macOS Big Sur, light) -------------------------------------- */
+@define-color mac_accent        #0a84ff;   /* selection blue                  */
+@define-color mac_window_bg      #ffffff;   /* content area                    */
+@define-color mac_sidebar_bg     #f2f1f4;   /* translucent-gray sidebar        */
+@define-color mac_toolbar_bg     #f6f5f7;   /* titlebar / toolbar              */
+@define-color mac_border         #dcdbde;   /* hairline separators             */
+@define-color mac_text           #1d1d1f;
+@define-color mac_text_dim       #86868b;   /* sidebar headings, secondary     */
+
+/* --- Window -------------------------------------------------------------- */
+.nemo-window {
+    background-color: @mac_window_bg;
+    color: @mac_text;
+}
+
+/* --- Toolbar (Nemo class: primary-toolbar) ------------------------------- */
+.nemo-window .primary-toolbar {
+    background-color: @mac_toolbar_bg;
+    border-bottom: 1px solid @mac_border;
+    padding: 4px 6px;
+}
+
+/* Flat, rounded toolbar buttons — Finder-style, no heavy chrome. */
+.nemo-window .primary-toolbar button {
+    background: none;
+    border: none;
+    box-shadow: none;
+    border-radius: 6px;
+    padding: 4px 6px;
+    min-height: 24px;
+    color: @mac_text;
+}
+.nemo-window .primary-toolbar button:hover {
+    background-color: alpha(black, 0.06);
+}
+.nemo-window .primary-toolbar button:active,
+.nemo-window .primary-toolbar button:checked {
+    background-color: alpha(black, 0.11);
+}
+
+/* --- Path bar (breadcrumb) ----------------------------------------------- */
+.nemo-window .nemo-pathbar button,
+.nemo-window .path-bar button {
+    background: none;
+    border: none;
+    box-shadow: none;
+    border-radius: 6px;
+    padding: 3px 8px;
+}
+.nemo-window .nemo-pathbar button:hover,
+.nemo-window .path-bar button:hover {
+    background-color: alpha(black, 0.06);
+}
+
+/* --- Location / search entry --------------------------------------------- */
+.nemo-window entry,
+.nemo-window .nemo-location-entry {
+    border-radius: 6px;
+    border: 1px solid @mac_border;
+    padding: 3px 8px;
+    background-color: #ffffff;
+}
+.nemo-window entry:focus {
+    border-color: @mac_accent;
+    box-shadow: inset 0 0 0 1px @mac_accent;
+}
+
+/* --- Sidebar (Places / Tree) --------------------------------------------- */
+.nemo-window .nemo-places-sidebar,
+.nemo-window .nemo-tree-sidebar,
+.nemo-window .sidebar {
+    background-color: @mac_sidebar_bg;
+    border-right: 1px solid @mac_border;
+    color: @mac_text;
+}
+/* Sidebar rows: no default treeview grid look; rounded accent selection. */
+.nemo-window .nemo-places-sidebar .view,
+.nemo-window .sidebar .view {
+    background-color: transparent;
+}
+.nemo-window .nemo-places-sidebar .view:selected,
+.nemo-window .sidebar .view:selected {
+    background-color: @mac_accent;
+    color: #ffffff;
+    border-radius: 6px;
+}
+/* Dim, uppercase-feel section headings handled by Nemo; just soften color. */
+.nemo-window .nemo-places-sidebar .view:disabled {
+    color: @mac_text_dim;
+}
+
+/* --- Main view: list + icon --------------------------------------------- */
+.nemo-window .nemo-list-view,
+.nemo-window .nemo-icon-view {
+    background-color: @mac_window_bg;
+}
+/* Rounded selection in the file area — the signature Finder detail. */
+.nemo-window .view:selected,
+.nemo-window treeview.view:selected,
+.nemo-window iconview:selected {
+    background-color: @mac_accent;
+    color: #ffffff;
+    border-radius: 6px;
+}
+/* Unfocused pane selection = neutral gray (macOS behaviour). */
+.nemo-window .view:selected:backdrop,
+.nemo-window treeview.view:selected:backdrop {
+    background-color: #d1d1d6;
+    color: @mac_text;
+}
+
+/* --- Status bar / floating bar ------------------------------------------- */
+.nemo-window .nemo-statusbar,
+.nemo-window .nemo-floating-bar {
+    background-color: @mac_toolbar_bg;
+    border-top: 1px solid @mac_border;
+    color: @mac_text_dim;
+    font-size: 0.9em;
+}
+
+/* --- Tabs (notebook) ----------------------------------------------------- */
+.nemo-window notebook > header {
+    background-color: @mac_toolbar_bg;
+}

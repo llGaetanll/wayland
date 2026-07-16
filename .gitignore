@@ -26,5 +26,11 @@
 .config/firefox/chrome/*
 !.config/firefox/chrome/userChrome.css
 
+# GTK3 (Nemo styling): track only our css + settings, not bookmarks/caches.
+!.config/gtk-3.0/
+.config/gtk-3.0/*
+!.config/gtk-3.0/gtk.css
+!.config/gtk-3.0/settings.ini
+
 # Misc
 !.zprofile
