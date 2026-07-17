@@ -283,7 +283,11 @@ if not _G.__mac_spaces_init then
     hl.on("window.close",     function() hl.exec_cmd(sync_bars) end)
 
     -- 3-finger horizontal swipe = move between workspaces (Spaces), macOS-style.
-    hl.gesture({ fingers = 3, direction = "horizontal", action = "workspace" })
+    -- scale is a delta multiplier: < 1 makes the workspaces track your fingers more
+    -- slowly, so you must swipe FURTHER to switch — i.e. less sensitive / less
+    -- twitchy. 0.5 ≈ double the finger travel of the default; lower it toward ~0.3
+    -- for even less sensitivity, or raise back toward 1.0 for more.
+    hl.gesture({ fingers = 3, direction = "horizontal", action = "workspace", scale = 0.5 })
 end
 
 -- Allow hyprpm to load plugins. The Lua config has a permission model;
@@ -314,8 +318,11 @@ if hl.plugin and hl.plugin.hyprbars ~= nil then
         bar_height = 26,
         -- Translucent bar + bar_blur so the title bar frosts the same way the
         -- window body does. Alpha (d9 ≈ 0.85) matches alacritty's opacity so the
-        -- bar and terminal read as one surface. Per-app colors below keep their
-        -- own alpha too.
+        -- bar and terminal read as close to one surface as hyprbars allows. (A
+        -- fully seamless join isn't possible: hyprbars always gives the bar its own
+        -- strip ABOVE the client area — bar_part_of_window only governs shadows,
+        -- not whether the window draws under the bar — so the bar and body are
+        -- always two independently-blurred rects with a faint seam between them.)
         bar_color = "rgba(2e2e2ed9)",
         bar_blur = true,
         bar_text_size = 0,
@@ -353,9 +360,9 @@ if hl.plugin and hl.plugin.hyprbars ~= nil then
     -- Alacritty has no [colors.primary] in its config, so it uses the built-in
     -- default background #181818 (alacritty 0.17). The d9 alpha (≈ 0.85) matches
     -- alacritty's own window opacity, so the title bar and terminal body share the
-    -- same translucency and bar_blur frosts them as one surface — without the alpha
-    -- the bar would be a solid strip above a see-through terminal. Update this if
-    -- you set a theme / change opacity.
+    -- same translucency and bar_blur frosts them alike — without the alpha the bar
+    -- would be a solid strip above a see-through terminal. Update this if you set a
+    -- theme / change opacity.
     local bar_colors = {
         Alacritty = "rgba(181818d9)",
     }
