@@ -126,7 +126,13 @@ hl.window_rule({ name = "firefox-size", match = { class = "[Ff]irefox" }, size =
 hl.config({ general = { resize_on_border = true, extend_border_grab_area = 15, border_size = 0 } })
 
 -- Rounded corners (all four — Hyprland rounding is uniform, no per-corner).
-hl.config({ decoration = { rounding = 6 } })
+-- Window blur applies to anything rendered with alpha < 1 (e.g. alacritty
+-- opacity = 0.85). new_optimizations improves perf; xray = false blurs the
+-- desktop/wallpaper behind a window rather than other windows.
+hl.config({ decoration = {
+  rounding = 6,
+  blur = { enabled = true, size = 6, passes = 3, new_optimizations = true, xray = false },
+} })
 
 -- Mouse: Super + left-drag moves a window, Super + right-drag resizes it.
 hl.bind("SUPER + mouse:272", hl.dsp.window.drag(),   { mouse = true })
@@ -306,7 +312,12 @@ end)
 if hl.plugin and hl.plugin.hyprbars ~= nil then
     hl.config({ plugin = { hyprbars = {
         bar_height = 26,
-        bar_color = "rgb(2e2e2e)",
+        -- Translucent bar + bar_blur so the title bar frosts the same way the
+        -- window body does. Alpha (d9 ≈ 0.85) matches alacritty's opacity so the
+        -- bar and terminal read as one surface. Per-app colors below keep their
+        -- own alpha too.
+        bar_color = "rgba(2e2e2ed9)",
+        bar_blur = true,
         bar_text_size = 0,
         bar_text_font = "Inter",
         bar_text_align = "center",
@@ -340,9 +351,13 @@ if hl.plugin and hl.plugin.hyprbars ~= nil then
     -- To theme another app, add a `[class] = color` entry — nothing else to change.
     --
     -- Alacritty has no [colors.primary] in its config, so it uses the built-in
-    -- default background #181818 (alacritty 0.17). Update this if you set a theme.
+    -- default background #181818 (alacritty 0.17). The d9 alpha (≈ 0.85) matches
+    -- alacritty's own window opacity, so the title bar and terminal body share the
+    -- same translucency and bar_blur frosts them as one surface — without the alpha
+    -- the bar would be a solid strip above a see-through terminal. Update this if
+    -- you set a theme / change opacity.
     local bar_colors = {
-        Alacritty = "rgb(181818)",
+        Alacritty = "rgba(181818d9)",
     }
     for class, color in pairs(bar_colors) do
         hl.window_rule({
