@@ -3,45 +3,61 @@
 #
 #   screenshot.sh
 #
-# Flow: slurp gives a crosshair region select; grim captures that region to a
-# fresh staging file; then the eww `shot-menu` opens top-right showing the shot
-# with Copy / Save actions (shot-action.sh). Bound to Print (see hyprland.lua).
+# Flow: grab the WHOLE screen up-front, let slurp pick a region, crop the grab to
+# it, then open the eww `shot-menu` top-right with Copy / Save / Discard actions
+# (shot-action.sh). Bound to Print / SUPER+SHIFT+S (see hyprland.lua).
 set -uo pipefail
 
 EWW="eww"
 STAGE_DIR="${XDG_RUNTIME_DIR:-/tmp}/eww-shots"
 mkdir -p "$STAGE_DIR"
 
-# slurp: crosshair region select, themed to the macOS accent (#0a84ff). A cancel
-# (Esc / right-click) makes slurp exit non-zero with empty output → abort quietly
-# WITHOUT touching the menu, so an accidental trigger leaves nothing behind.
-geom=$(slurp -b 00000040 -c 0a84ffff -s 0a84ff26 -w 2 2>/dev/null) || exit 0
-[ -n "$geom" ] || exit 0
+# Reap older staged shots first so the dir doesn't grow unbounded (both the full
+# grabs and cropped shots match *.png; none of this run's files exist yet).
+find "$STAGE_DIR" -maxdepth 1 -name '*.png' -delete 2>/dev/null
 
-# Serialise from here on (a second Print press can't race the window mutation),
-# and close any menu still open from a previous shot before opening a fresh one —
-# eww 0.5.0 does NOT dedupe opens, so re-opening an open window orphans a surface.
+# Grab the full screen BEFORE slurp draws anything. This is what keeps slurp's
+# selection overlay (the blue fill + dim) OUT of the shot: we already hold a clean
+# frame by the time slurp's surface exists, and we crop THAT. The naive
+# `grim -g "$(slurp)"` races — grim can grab a frame in which the compositor hasn't
+# yet torn down slurp's overlay, baking the blue region in.
+full="$STAGE_DIR/full-$(date +%s%N).png"
+grim "$full" || exit 1
+
+# slurp: crosshair region select, themed to the macOS accent (#0a84ff). A cancel
+# (Esc / right-click) → empty output; drop the grab and abort quietly so an
+# accidental trigger leaves nothing behind.
+geom=$(slurp -b 00000040 -c 0a84ffff -s 0a84ff26 -w 2 2>/dev/null)
+if [ -z "$geom" ]; then rm -f "$full"; exit 0; fi
+
+# slurp prints "X,Y WxH"; ImageMagick wants "WxH+X+Y". Parse with pure bash.
+xy=${geom%% *}; wh=${geom##* }
+x=${xy%,*}; y=${xy#*,}
+w=${wh%x*}; h=${wh#*x}
+if ! [[ "$x" =~ ^[0-9]+$ && "$y" =~ ^[0-9]+$ && "$w" =~ ^[0-9]+$ && "$h" =~ ^[0-9]+$ ]]; then
+  rm -f "$full"; exit 1
+fi
+
+# Serialise the eww window mutation from here (a second Print can't race it), and
+# close any menu still open from a previous shot before opening a fresh one — eww
+# 0.5.0 does NOT dedupe opens, so re-opening an open window orphans a surface.
 exec 9>"$STAGE_DIR/.lock"
 flock 9
 if [ "$($EWW get shot_open 2>/dev/null)" = true ]; then
   $EWW close shot-menu shot-backdrop 2>/dev/null
 fi
 
-# Fresh filename per shot: eww/GTK cache background-images by path, so reusing one
-# path would show the PREVIOUS screenshot. A timestamped name busts that cache; we
-# also reap older staged shots first so the dir doesn't grow unbounded.
-find "$STAGE_DIR" -maxdepth 1 -name '*.png' -delete 2>/dev/null
+# Crop the clean full grab to the selection. Fresh filename per shot: eww/GTK cache
+# background-images by path, so reusing one path would show the PREVIOUS shot.
+# +repage resets the canvas so the PNG's dimensions/offset are the crop, not the
+# full screen. Monitor scale is 1.0, so slurp's logical coords == grab pixels.
 file="$STAGE_DIR/shot-$(date +%s%N).png"
+magick "$full" -crop "${w}x${h}+${x}+${y}" +repage "$file" || { rm -f "$full"; exit 1; }
+rm -f "$full"
 
-grim -g "$geom" "$file" || exit 1
-
-# Preview box size: preserve the captured aspect ratio, capped to 320px wide
-# (monitor scale is 1.0, so slurp's WxH == pixel WxH). eww renders the shot as a
-# rounded box background sized to these — the same icon/background-image idiom used
-# by the dock and status bar, so it clips to rounded corners for free.
-read -r w h < <(printf '%s' "$geom" | sed -E 's/.* ([0-9]+)x([0-9]+)$/\1 \2/')
-[[ "$w" =~ ^[0-9]+$ ]] || w=320
-[[ "$h" =~ ^[0-9]+$ ]] || h=200
+# Preview box size: preserve the captured aspect ratio, capped to 320px wide. eww
+# renders the shot as a rounded box background sized to these — the same
+# icon/background-image idiom the dock and status bar use, so it clips corners free.
 maxw=320
 if [ "$w" -gt "$maxw" ]; then
   pw=$maxw
