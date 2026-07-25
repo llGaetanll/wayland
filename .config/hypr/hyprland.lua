@@ -352,37 +352,49 @@ if hl.plugin and hl.plugin.hyprbars ~= nil then
     hl.plugin.hyprbars.add_button({ bg_color = "rgb(ff5f57)", fg_color = "rgb(2e2e2e)", size = 11, icon = "×", action = "/home/al/.config/hypr/scripts/mac-fullscreen.sh close" })
     hl.plugin.hyprbars.add_button({ bg_color = "rgb(28c840)", fg_color = "rgb(2e2e2e)", size = 11, icon = "+", action = [[hyprctl dispatch "hl.dsp.window.fullscreen({ mode = 'maximized' })"]] })
 
-    -- Per-app title bar colors: make each app's bar blend into that app's own
-    -- background instead of the global bar_color above. hyprbars exposes a
-    -- per-window `hyprbars:bar_color` effect; a window rule keyed on class sets it.
-    -- To theme another app, add a `[class] = color` entry — nothing else to change.
+    -- Title bars are OPT-IN. hyprbars draws a bar on every window by default, so
+    -- we invert that: a catch-all rule hides the bar everywhere, then each app in
+    -- the allowlist below re-enables it. Most apps (Firefox, browsers, etc.) draw
+    -- their own chrome, so a hyprbars strip on top would just be redundant; only
+    -- the apps that have no titlebar of their own are opted back in here.
     --
+    -- This relies on hyprbars' `no_bar` being a windowEffects rule (last matching
+    -- rule wins): the per-app `no_bar = false` below overrides the catch-all
+    -- `no_bar = true` for that class. To give an app a title bar, add an entry to
+    -- `titlebar_apps` — nothing else to change.
+    --
+    -- `color` (optional) sets a per-app bar color so the bar blends into that app's
+    -- own background instead of the global bar_color above (nil = use bar_color).
     -- Alacritty has no [colors.primary] in its config, so it uses the built-in
-    -- default background #181818 (alacritty 0.17). The d9 alpha (≈ 0.85) matches
-    -- alacritty's own window opacity, so the title bar and terminal body share the
-    -- same translucency and bar_blur frosts them alike — without the alpha the bar
-    -- would be a solid strip above a see-through terminal. Update this if you set a
-    -- theme / change opacity.
-    local bar_colors = {
-        Alacritty = "rgba(181818d9)",
+    -- default background #181818 (alacritty 0.17); the d9 alpha (≈ 0.85) matches
+    -- alacritty's own window opacity so the bar and terminal body frost alike.
+    local titlebar_apps = {
+        { class = "Alacritty", color = "rgba(181818d9)" },
+        { class = "nemo",      color = nil            },
     }
-    for class, color in pairs(bar_colors) do
-        hl.window_rule({
-            name = "hyprbars-color-" .. class,
-            match = { class = "^" .. class .. "$" },
-            ["hyprbars:bar_color"] = color,
-        })
-    end
 
-    -- Firefox: no hyprbars bar. Firefox draws its own tab strip as the title bar,
-    -- and userChrome.css (~/.config/firefox/chrome/userChrome.css) puts macOS-style
-    -- traffic-light buttons inline to the left of the tabs. hyprbars would just be
-    -- a redundant strip above that, so hide it for Firefox windows.
+    -- Hide the bar on everything by default...
     hl.window_rule({
-        name = "hyprbars-nobar-firefox",
-        match = { class = "[Ff]irefox" },
+        name = "hyprbars-nobar-default",
+        match = { class = ".*" },
         ["hyprbars:no_bar"] = true,
     })
+
+    -- ...then opt the allowlisted apps back in (and color their bars).
+    for _, app in ipairs(titlebar_apps) do
+        hl.window_rule({
+            name = "hyprbars-bar-" .. app.class,
+            match = { class = "^" .. app.class .. "$" },
+            ["hyprbars:no_bar"] = false,
+        })
+        if app.color then
+            hl.window_rule({
+                name = "hyprbars-color-" .. app.class,
+                match = { class = "^" .. app.class .. "$" },
+                ["hyprbars:bar_color"] = app.color,
+            })
+        end
+    end
 else
     -- First login: load the (enabled but not-yet-loaded) hyprbars plugin, poll
     -- until it registers, then trigger one `hyprctl reload` so the block above
