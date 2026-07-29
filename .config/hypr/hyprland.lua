@@ -75,9 +75,18 @@ hl.on("hyprland.start", function() hl.exec_cmd("pipewire") end)
 hl.on("hyprland.start", function() hl.exec_cmd("wireplumber") end)
 hl.on("hyprland.start", function() hl.exec_cmd("pipewire-pulse") end)
 
--- Top Bar: eww window (~/.config/eww), matching the eww dock. `eww open`
--- auto-starts the daemon if it isn't already running.
-hl.on("hyprland.start", function() hl.exec_cmd("eww open bar") end)
+-- Top Bar + dock: both are eww windows (~/.config/eww). Start ONE eww daemon
+-- explicitly, then open both windows against it, sequentially, in a single
+-- handler. Do NOT rely on `eww open` to auto-start the daemon from two separate
+-- hyprland.start handlers: they race to bootstrap the daemon, and the survivor
+-- ends up with an inconsistent window registry — the bar reserves screen space
+-- but the daemon doesn't list it as open, so `eww close bar` (from
+-- sync-bars.sh on fullscreen) becomes a silent no-op and the bar never hides.
+-- `eww daemon` returns once the daemon is ready, so the opens that follow all
+-- talk to the same known daemon and `eww close bar`/`eww close dock` work.
+hl.on("hyprland.start", function()
+    hl.exec_cmd("sh -c 'eww daemon; eww open bar; eww open dock'")
+end)
 
 -- Animation Curves
 hl.curve("smooth", { type = "bezier", points = {{0.25, 0.1}, {0.25, 1.0}} })
@@ -294,11 +303,6 @@ end
 -- without this, plugins (e.g. hyprbars for title bars) are denied.
 hl.permission("/usr/(bin|local/bin)/hyprpm", "plugin", "allow")
 
--- mac-style dock: an eww window pinned to the bottom (~/.config/eww).
--- `eww open` auto-starts the daemon if it isn't already running.
-hl.on("hyprland.start", function()
-    hl.exec_cmd("eww open dock")
-end)
 
 -- Title bars (hyprbars), mac-style.
 --
