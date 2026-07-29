@@ -6,27 +6,33 @@
 (defpoll theme :interval "5s" :initial "light"
   `gsettings get org.gnome.desktop.interface color-scheme | grep -qi dark && echo dark || echo light`)
 
-(defwidget applaunch [icon cmd]
-  (button :class "dock-btn"
-          :onclick "${cmd} &"
-    ;; Fixed-size cell (see .dock-cell) with the icon centered inside it, so the
-    ;; icon grows in place — the dock and neighbours never move. The icon is a
-    ;; CSS background-image so its size (and the hover grow) is styled + animated
-    ;; entirely in eww.scss — no per-hover subprocess, so it's instant + smooth.
-    (box :class "dock-cell" :halign "center" :valign "center"
-      (box :class "dock-icon" :halign "center" :valign "center"
-           :style "background-image: url('${icon}');"))))
+;; The dock's apps + order come from dock.sh (see that script for the registry).
+;; :initial avoids an empty-dock flash on startup; swaps push updates live via
+;; `eww update dock_apps=...`, so the 1h interval is just a lazy resync.
+(defpoll dock_apps :interval "3600s"
+  :initial `~/.config/eww/scripts/dock.sh list`
+  `~/.config/eww/scripts/dock.sh list`)
+
+;; One dock slot. The eventbox layer makes the slot draggable (dragvalue = its
+;; app id) AND a drop target: dropping app {} onto this slot swaps the two in the
+;; order file. A plain click still falls through to the button, which launches.
+(defwidget applaunch [id icon cmd]
+  (eventbox :class "dock-slot" :dragvalue id :dragtype "values"
+            :ondropped "~/.config/eww/scripts/dock.sh swap {} ${id}"
+    (button :class "dock-btn"
+            :onclick "cd ~ && ${cmd} &"
+      ;; Fixed-size cell (see .dock-cell) with the icon centered inside it, so the
+      ;; icon grows in place — the dock and neighbours never move. The icon is a
+      ;; CSS background-image so its size (and the hover grow) is styled + animated
+      ;; entirely in eww.scss — no per-hover subprocess, so it's instant + smooth.
+      (box :class "dock-cell" :halign "center" :valign "center"
+        (box :class "dock-icon" :halign "center" :valign "center"
+             :style "background-image: url('${icon}');")))))
 
 (defwidget dock []
   (box :class "dock ${theme}" :space-evenly false :valign "center" :spacing 2
-    (applaunch :cmd "firefox"
-               :icon "/usr/share/icons/hicolor/128x128/apps/firefox.png")
-    (applaunch :cmd "alacritty"
-               :icon "/usr/share/icons/WhiteSur-light/apps/scalable/Alacritty.svg")
-    (applaunch :cmd "nemo"
-               :icon "/usr/share/icons/WhiteSur-light/apps/scalable/nemo.svg")
-    (applaunch :cmd "discord"
-               :icon "/usr/share/icons/WhiteSur-light/apps/scalable/discord.svg")))
+    (for a in {dock_apps}
+      (applaunch :id {a.id} :cmd {a.cmd} :icon {a.icon}))))
 
 (defwindow dock
   :monitor 0
@@ -285,8 +291,9 @@
   (button :class "backdrop" :onclick "~/.config/eww/scripts/shot-action.sh close"
           :hexpand true :vexpand true))
 
-;; :exclusive true reserves the 24px strip (windows tile below it), which also
-;; keeps sync-bars.sh's reserved-area "is it shown" check valid.
+;; :exclusive true reserves the 24px strip so windows tile below the bar rather
+;; than under it. (Visibility is tracked by sync-bars.sh per-window via
+;; `eww active-windows`, not by this reserved area.)
 (defwindow bar
   :monitor 0
   :geometry (geometry :x "0px" :y "0px" :width "100%" :height "24px" :anchor "top center")
