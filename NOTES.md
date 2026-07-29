@@ -17,8 +17,9 @@ with (h/m/l) to indicate priority.
   containing the slider is too transparent. The color of the box containing the
   slider should be the background color used by the sub-widgets, and the color
   of the slider should be the accent color.
-- [ ] Define clean system key bindings in hyperland to open important programs
+- [ ] (m) Define clean system key bindings in hyperland to open important programs
   or tile windows at will
+- [ ] (l) Make it easy to change timezone
 
 # Neovim
 - [x] (h) `.yuck` files still not syntax highlighted in buffers, even though
@@ -28,6 +29,9 @@ with (h/m/l) to indicate priority.
 
 - [x] (h) Clicking outside of a sub-widget should hide that subwidget
 - [ ] (l) Pressing ESC when a sub-widget is shown should high it
+- [ ] (m) Widget height often exceeds list content (wifi, bluetooth)
+- [ ] (m) Widget animation as elements are added to a list seems to jump. Does
+  not look good.
 
 ## Battery
 - [ ] (l) Modify battery svg to match iPhone svg (currently incorrect)
@@ -53,6 +57,13 @@ with (h/m/l) to indicate priority.
   more closely.
 
 # Desktop Widgets
+Behave in a css grid-like system, shown on background, transluscent with rounded
+corners.
+
+- [ ] (l) Build a time widget (clocks for predefined cities)
+- [ ] (l) Build connection widget.
+  - Have a predefined list of websites we ping every 10 seconds to track latency to those sites
+  - Display VPN information?
 - [ ] (l) Build weather widget
-- [ ] (l) Build calendar widget
+- [ ] (l) Build calendar widget that taps into Google Calendar
 
