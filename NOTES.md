@@ -2,16 +2,30 @@ File to keep track of bugs, features, or general notes. Each bullet is annotated
 with (h/m/l) to indicate priority.
 
 # Misc
+- [ ] (h) Define a shared color system used consistently across eww widgets and
+  rest of the system. Only two colors for now: `background`, and `accent`.
+  `background` should be the current background color used by subwidgets in the
+  top bar. `accent` should be an appropriate shade blue.
 - [ ] (m) Clean up hyperland.lua files into cleaner structure. Ease off on prolific
   comments
 - [ ] (m) Might want to subdivide ~/.config/eww/scripts directory into
   subfolders for each module. Cleaner and more maintainable
+- [ ] (m) Add minimize button to title bar. Minimized window should go into the
+  dock, similar to mac os
+- [ ] (m) The volume/brightness sliders are two-toned: the color of the slider,
+  and the color of the box containing the slider. The color of the box
+  containing the slider is too transparent. The color of the box containing the
+  slider should be the background color used by the sub-widgets, and the color
+  of the slider should be the accent color.
 
 # Neovim
-- [ ] (l) `.yuck` files still not syntax highlighted in buffers, even though
+- [ ] (h) `.yuck` files still not syntax highlighted in buffers, even though
   grammar is installed in TreeSitter
 
 # Top Bar
+
+- [ ] (h) Clicking outside of a sub-widget should hide that subwidget
+- [ ] (l) Pressing ESC when a sub-widget is shown should high it
 
 ## Battery
 - [ ] (l) Modify battery svg to match iPhone svg (currently incorrect)
