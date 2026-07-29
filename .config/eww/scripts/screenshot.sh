@@ -9,6 +9,8 @@
 set -uo pipefail
 
 EWW="eww"
+. "$HOME/.config/colors.sh"
+accent_hex=${ACCENT#\#}
 STAGE_DIR="${XDG_RUNTIME_DIR:-/tmp}/eww-shots"
 mkdir -p "$STAGE_DIR"
 
@@ -24,10 +26,10 @@ find "$STAGE_DIR" -maxdepth 1 -name '*.png' -delete 2>/dev/null
 full="$STAGE_DIR/full-$(date +%s%N).png"
 grim "$full" || exit 1
 
-# slurp: crosshair region select, themed to the macOS accent (#0a84ff). A cancel
+# slurp: crosshair region select, themed to the shared accent. A cancel
 # (Esc / right-click) → empty output; drop the grab and abort quietly so an
 # accidental trigger leaves nothing behind.
-geom=$(slurp -b 00000040 -c 0a84ffff -s 0a84ff26 -w 2 2>/dev/null)
+geom=$(slurp -b 00000040 -c "${accent_hex}ff" -s "${accent_hex}26" -w 2 2>/dev/null)
 if [ -z "$geom" ]; then rm -f "$full"; exit 0; fi
 
 # slurp prints "X,Y WxH"; ImageMagick wants "WxH+X+Y". Parse with pure bash.

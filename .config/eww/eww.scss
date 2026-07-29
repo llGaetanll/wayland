@@ -1,3 +1,5 @@
+@import "colors";
+
 * { all: unset; }
 
 // Keep the eww window itself transparent (Adwaita paints it otherwise).
@@ -8,15 +10,15 @@
   padding: 4px 8px;
 }
 
-// Fixed cell = the icon's max (hover) size, so growing an icon never resizes
-// the dock or nudges its neighbours.
+// Sized to the icon's hover size, so growing an icon never resizes the dock or
+// nudges its neighbours.
 .dock-cell {
-  min-width: 62px;    // = hover size, so the grow stays inside the cell
+  min-width: 62px;
   min-height: 62px;
 }
 
-// The icon itself, drawn as a scalable background-image. Growing min-width/height
-// on hover is CSS-animatable, so the grow is smooth (unlike the image widget).
+// Drawn as a background-image because growing min-width/height is
+// CSS-animatable, unlike the image widget.
 .dock-icon {
   min-width: 52px;
   min-height: 52px;
@@ -30,9 +32,8 @@
   min-height: 62px;
 }
 
-// Theme background — chosen by the `theme` class (follows the system).
-.dock.light { background-color: rgba(255, 255, 255, 0.45); }
-.dock.dark  { background-color: rgba(40, 40, 40, 0.45); }
+.dock.light { background-color: $background-light; }
+.dock.dark  { background-color: $background-dark; }
 
 .bar {
   padding: 0 12px;
@@ -55,14 +56,12 @@
   background-repeat: no-repeat;
   background-position: center;
   background-size: contain;
-  margin-left: 8px;   // the status box has no :spacing (see below), so space it here
+  margin-left: 8px;   // statusicons has no :spacing, so space it here
 }
 
-// The clickable area. GTK sizes a button to its child, so with no padding the
-// hit target was exactly the 16x16 icon — that's why the bar felt like it
-// needed pixel-perfect aiming. The padding here does double duty: it's the
-// visual gap between icons AND part of the button, so the whole 24x22 cell is
-// clickable and neighbouring cells are contiguous (statusicons has :spacing 0).
+// GTK sizes a button to its child, so with no padding the hit target would be
+// the bare 16x16 icon. This padding is both the visual gap between icons and
+// part of the button, keeping neighbouring cells contiguous and clickable.
 .sicon {
   padding: 3px 4px;
 }
@@ -77,8 +76,8 @@
   font-family: "Inter", sans-serif;
   font-size: 13px;
 
-  &.light { background-color: rgba(244, 244, 246, 0.7); color: #000000; }
-  &.dark  { background-color: rgba(38, 38, 40, 0.7);    color: #ffffff; }
+  &.light { background-color: $background-light; color: #000000; }
+  &.dark  { background-color: $background-dark;  color: #ffffff; }
 }
 
 .menu-head { padding: 4px 8px 6px 8px; }
@@ -113,7 +112,7 @@
 .row-check {
   min-width: 16px;
   font-weight: 700;
-  color: #0a84ff;            // macOS blue checkmark
+  color: $accent;
 }
 .row-icon {
   min-width: 18px;
@@ -126,44 +125,39 @@
 .foot { color: rgba(0, 0, 0, 0.55); }
 .menu.dark .foot { color: rgba(255, 255, 255, 0.55); }
 
-// ─── Bare iOS-style slider popups (volume / brightness) ─────────────────────
-// The whole popup IS the slider — no card. Track + fill are translucent white
-// (the same tone as the bar/dock module bg); the Hyprland blur frosts them.
-// Taller + shorter + small radius, with a hidden thumb so the fill is the bar.
-// Visual: fixed-size rounded box; the gradient (set inline per value) is clipped
-// to these corners by GTK, so the fill is rounded at both ends and never
-// squishes (the box never resizes). Radius matches the other menus (12px).
-.islider-bg {
-  min-height: 51px;
-  border-radius: 12px;
-}
-
-// Transparent scale stacked on top — purely for drag/scroll input. margin:0 on
-// the scale + trough and a zero-size slider make the trough span the FULL width,
-// so dragging to the far right reaches exactly 100 (otherwise GTK reserves
-// slider space at the ends and the max drag lands a few % short → a gap).
+// The whole popup is the slider, no card: the trough is the background and the
+// highlight is the accent fill. margin:0 plus a 1px slider makes the trough span
+// the full width, so dragging to the far right reaches exactly 100 instead of
+// landing short on GTK's reserved slider space. The slider must stay non-zero,
+// or GTK gives the highlight no width and the fill never shows.
 .islider-input {
   margin: 0;
   padding: 0;
   trough {
     min-height: 51px;
     border-radius: 12px;
-    background-color: transparent;
     margin: 0;
     padding: 0;
   }
-  highlight { background-color: transparent; }
+  highlight {
+    background-color: $accent;
+    border-radius: 12px;
+    min-height: 51px;
+    margin: 0;
+    padding: 0;
+  }
   slider {
     background-color: transparent;
     border: none;
     box-shadow: none;
     margin: 0;
     padding: 0;
-    min-width: 0;
-    min-height: 0;
+    min-width: 1px;
+    min-height: 1px;
   }
 }
-// Icon overlaid inside the slider, inset from the left edge.
+.islider.light .islider-input trough { background-color: $background-light; }
+.islider.dark  .islider-input trough { background-color: $background-dark; }
 .islider-icon {
   min-width: 18px;
   min-height: 18px;
@@ -173,9 +167,8 @@
   background-size: contain;
 }
 
-// iOS-style on/off switch. The pill lives on an inner box (.sw), not the button
-// (.sw-btn) — a button stretches to the tall two-line header, a box with valign
-// center holds its 22px height.
+// The pill lives on an inner box rather than the button, because a button
+// stretches to the tall two-line header while a valign-center box keeps its 22px.
 .sw-btn { background-color: transparent; }
 .sw {
   min-width: 38px;
@@ -183,7 +176,7 @@
   border-radius: 11px;
   padding: 2px;
   transition: background-color 150ms ease;
-  &.on  { background-color: #34c759; }             // green
+  &.on  { background-color: $accent; }
   &.off { background-color: rgba(120, 120, 128, 0.32); }
 }
 .sw-knob {
@@ -194,10 +187,8 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
-// ─── Screenshot preview menu ────────────────────────────────────────────────
-// Reuses the .menu card (rounded, translucent, blurred). The shot itself is a
-// rounded box background-image (same idiom as the dock/status icons), sized by
-// screenshot.sh to the captured aspect ratio so it never distorts.
+// Reuses the .menu card. The shot is a rounded background-image box sized by
+// screenshot.sh to the captured aspect ratio, so it never distorts.
 .shot { padding: 10px; }
 .shot-preview {
   border-radius: 8px;
@@ -211,13 +202,11 @@
   border-radius: 7px;
   font-weight: 500;
 }
-// Per-theme base fill + hover (matches the .row treatment). All buttons share
-// the same neutral fill — no accent-colored primary.
 .menu.light .shot-btn { background-color: rgba(0, 0, 0, 0.06); }
 .menu.dark  .shot-btn { background-color: rgba(255, 255, 255, 0.10); }
 .menu.light .shot-btn:hover { background-color: rgba(0, 0, 0, 0.12); }
 .menu.dark  .shot-btn:hover { background-color: rgba(255, 255, 255, 0.16); }
 
 // Same translucent fills as the dock so the two match.
-.bar.light { background-color: rgba(255, 255, 255, 0.45); color: #000000; }
-.bar.dark  { background-color: rgba(40, 40, 40, 0.45);   color: #ffffff; }
+.bar.light { background-color: $background-light; color: #000000; }
+.bar.dark  { background-color: $background-dark;  color: #ffffff; }
