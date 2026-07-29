@@ -18,9 +18,12 @@
 ;; order file. A plain click still falls through to the button, which launches.
 (defwidget applaunch [id icon cmd]
   (eventbox :class "dock-slot" :dragvalue id :dragtype "values"
-            :ondropped "~/.config/eww/scripts/dock.sh swap {} ${id}"
+            :ondropped "setsid -f ~/.config/eww/scripts/dock.sh swap {} ${id}"
+    ;; `setsid -f` (not a bare `&`) so the launched app is fully detached: eww
+    ;; SIGKILLs a widget's command once :timeout (default 200ms) expires, and a
+    ;; backgrounded child only survived that by luck of being orphaned.
     (button :class "dock-btn"
-            :onclick "cd ~ && ${cmd} &"
+            :onclick "setsid -f sh -c 'cd ~ && ${cmd}'"
       ;; Fixed-size cell (see .dock-cell) with the icon centered inside it, so the
       ;; icon grows in place — the dock and neighbours never move. The icon is a
       ;; CSS background-image so its size (and the hover grow) is styled + animated
@@ -58,15 +61,19 @@
 (defpoll bt_icon   :interval "6s"  `~/.config/eww/scripts/status.sh bluetooth`)
 (defpoll batt_icon :interval "15s" `~/.config/eww/scripts/battery.sh`)
 
+;; :spacing 0 is deliberate — the gap between icons comes from .sicon's padding
+;; instead, so it is INSIDE each button and therefore clickable. With spacing the
+;; gaps were dead zones and the hit target was the bare 16x16 icon, which is what
+;; made the bar feel like it needed pixel-perfect aiming.
 (defwidget statusicons []
-  (box :class "status" :space-evenly false :valign "center" :spacing 8
-    (button :class "sicon" :onclick "~/.config/eww/scripts/menu-toggle.sh volume"
+  (box :class "status" :space-evenly false :valign "center" :spacing 0
+    (button :class "sicon" :onclick "setsid -f ~/.config/eww/scripts/menu.sh toggle volume"
       (box :class "status-icon" :style "background-image: url('${vol_icon}');"))
-    (button :class "sicon" :onclick "~/.config/eww/scripts/menu-toggle.sh brightness"
+    (button :class "sicon" :onclick "setsid -f ~/.config/eww/scripts/menu.sh toggle brightness"
       (box :class "status-icon" :style "background-image: url('${bri_icon}');"))
-    (button :class "sicon" :onclick "~/.config/eww/scripts/menu-toggle.sh wifi"
+    (button :class "sicon" :onclick "setsid -f ~/.config/eww/scripts/menu.sh toggle wifi"
       (box :class "status-icon" :style "background-image: url('${net_icon}');"))
-    (button :class "sicon" :onclick "~/.config/eww/scripts/menu-toggle.sh bt"
+    (button :class "sicon" :onclick "setsid -f ~/.config/eww/scripts/menu.sh toggle bt"
       (box :class "status-icon" :style "background-image: url('${bt_icon}');"))
     (box :class "batt-icon" :style "background-image: url('${batt_icon}');")))
 
@@ -78,11 +85,34 @@
       (statusicons)
       (label :class "bar-clock" :text clock))))
 
+;; ─── Top-bar menu state ─────────────────────────────────────────────────────
+;; ONE var holds which BAR dropdown is open ("" = none). Every such window is
+;; named `<name>-menu` and they all share the single `menu-backdrop`
+;; click-catcher. menu.sh is the only thing allowed to write this var or open/
+;; close those windows — see the long comment at the top of that script for why
+;; one var instead of a per-menu boolean, and why every handler is `setsid -f`.
+;;
+;; Scope is the bar only. The screenshot preview further down is NOT part of this
+;; group: it's a transient popup from a keybind rather than a bar widget, so it
+;; is independent of these (and of them of it) and keeps its own open var and
+;; backdrop. A Print press should not dismiss an open bar menu.
+;;
+;; ─── Where this goes next (option C, not done yet) ───────────────────────────
+;; The scripts currently read state back out of the daemon (`eww get menu`) to
+;; decide what to do, i.e. eww is both the view AND the store, and every click
+;; costs a few processes and IPC round-trips. If the bar keeps growing, invert
+;; it: one long-lived script behind a `deflisten` owns all bar state and emits a
+;; single JSON blob (`{menu, wifi, bt, volume, ...}`); widgets read only that,
+;; and clicks write intents to a FIFO it consumes. eww becomes a pure view, all
+;; transitions happen in one process — no read-modify-write races, no per-click
+;; subprocess, and adding a widget is a field on the blob rather than another
+;; var + window + toggle path. The single-var model here is a step toward that,
+;; not away from it: `menu` becomes one field of the blob.
+(defvar menu "")
+
 ;; ─── Wi-Fi dropdown ─────────────────────────────────────────────────────────
-;; A macOS-style menu-bar dropdown. The poll only runs while the menu is open
-;; (:run-while), gated by wifi_open which menu-toggle.sh flips.
-(defvar wifi_open false)
-(defpoll wifi :interval "5s" :run-while wifi_open
+;; A macOS-style menu-bar dropdown. The poll only runs while the menu is open.
+(defpoll wifi :interval "5s" :run-while {menu == "wifi"}
   :initial `{"enabled":true,"networks":[],"list_h":40}`
   `~/.config/eww/scripts/wifi-list.sh`)
 
@@ -99,7 +129,7 @@
         (label :class "menu-sub" :halign "start" :limit-width 26 :show-truncated true
                :text {wifi.enabled ? (wifi.connected != "" ? wifi.connected : "Not connected") : "Off"}))
       (button :class "sw-btn" :valign "center"
-              :onclick "~/.config/eww/scripts/wifi-action.sh toggle"
+              :onclick "setsid -f ~/.config/eww/scripts/wifi-action.sh toggle"
         (box :class "sw ${wifi.enabled ? 'on' : 'off'}" :valign "center" :vexpand false
           (box :class "sw-knob" :valign "center" :halign {wifi.enabled ? "end" : "start"}))))
     (box :class "sep")
@@ -109,7 +139,7 @@
       (eventbox :cursor "default"
         (box :orientation "vertical" :space-evenly false :valign "start"
           (for n in {wifi.networks}
-            (button :class "row" :onclick "~/.config/eww/scripts/wifi-action.sh connect ${n.ssid_b64}"
+            (button :class "row" :onclick "setsid -f ~/.config/eww/scripts/wifi-action.sh connect ${n.ssid_b64}"
               (box :space-evenly false :spacing 8 :valign "center"
                 (label :class "row-check" :text {n.active ? "✓" : ""})
                 (label :class "row-name" :text {n.ssid} :halign "start" :hexpand true
@@ -119,9 +149,9 @@
                 (box :class "row-icon" :style "background-image: url('${n.icon}');")))))))))
 
 ;; focusable false is REQUIRED here: focusable true grabs keyboard focus and
-;; breaks the click-outside backdrop (verified). So Esc can't come from eww's
-;; onkeypressed (that needs focus) — it's handled by a dynamic Hyprland keybind
-;; that only exists while the menu is open (see menu-toggle.sh).
+;; breaks the click-outside backdrop (verified). A consequence is that Esc can't
+;; come from eww's onkeypressed (that needs focus), so there is currently no
+;; keyboard dismiss — it would need a Hyprland keybind bound while a menu is up.
 (defwindow wifi-menu
   :monitor 0
   :geometry (geometry :anchor "top right" :x "8px" :y "4px" :width "320px")
@@ -129,28 +159,29 @@
   :focusable false
   (wifi-panel))
 
-;; Full-screen click-catcher: eww windows don't close on focus loss, so clicking
-;; outside the menu lands here and dismisses it. It's a `button` (not a
-;; transparent eventbox) because a button is a real widget with a solid input
-;; region — a transparent eventbox has no input region and clicks fall through.
-;; Distinct :namespace so the Hyprland blur rule (which matches gtk-layer-shell)
-;; does NOT blur this full-screen surface — blurring 1920x1200 every frame
-;; near-locked the machine last time. bar/dock/menu keep the default namespace.
-(defwindow wifi-backdrop
+;; Full-screen click-catcher, shared by EVERY menu (there used to be one per
+;; menu, which was just more state to keep in sync). eww windows don't close on
+;; focus loss, so clicking outside the menu lands here and dismisses whatever
+;; `menu` currently names. It's a `button` (not a transparent eventbox) because a
+;; button is a real widget with a solid input region — a transparent eventbox has
+;; no input region and clicks fall through. Distinct :namespace so the Hyprland
+;; blur rule (which matches gtk-layer-shell) does NOT blur this full-screen
+;; surface — blurring 1920x1200 every frame near-locked the machine last time.
+;; bar/dock/menu keep the default namespace.
+(defwindow menu-backdrop
   :monitor 0
   :geometry (geometry :width "100%" :height "100%" :anchor "center")
   :stacking "overlay"
   :focusable false
   :namespace "eww-backdrop"
-  (button :class "backdrop" :onclick "~/.config/eww/scripts/menu-toggle.sh wifi"
+  (button :class "backdrop" :onclick "setsid -f ~/.config/eww/scripts/menu.sh close"
           :hexpand true :vexpand true))
 
 ;; ─── Bluetooth dropdown ─────────────────────────────────────────────────────
 ;; Same pattern as Wi-Fi. A device click toggles its connection (does NOT close
 ;; the menu — you watch the status update in place). bt_connecting holds the MAC
 ;; being (dis)connected so its row can show "Connecting…".
-(defvar bt_open false)
-(defpoll bt :interval "5s" :run-while bt_open
+(defpoll bt :interval "5s" :run-while {menu == "bt"}
   :initial `{"enabled":true,"devices":[],"list_h":40,"connected":""}`
   `~/.config/eww/scripts/bt-list.sh`)
 (defvar bt_connecting "")
@@ -163,7 +194,7 @@
         (label :class "menu-sub" :halign "start" :limit-width 26 :show-truncated true
                :text {bt.enabled ? (bt.connected != "" ? bt.connected : "On") : "Off"}))
       (button :class "sw-btn" :valign "center"
-              :onclick "~/.config/eww/scripts/bt-action.sh toggle"
+              :onclick "setsid -f ~/.config/eww/scripts/bt-action.sh toggle"
         (box :class "sw ${bt.enabled ? 'on' : 'off'}" :valign "center" :vexpand false
           (box :class "sw-knob" :valign "center" :halign {bt.enabled ? "end" : "start"}))))
     (box :class "sep")
@@ -171,7 +202,7 @@
       (eventbox :cursor "default"
         (box :orientation "vertical" :space-evenly false :valign "start"
           (for d in {bt.devices}
-            (button :class "row" :onclick "~/.config/eww/scripts/bt-action.sh connect ${d.mac_b64}"
+            (button :class "row" :onclick "setsid -f ~/.config/eww/scripts/bt-action.sh connect ${d.mac_b64}"
               (box :space-evenly false :spacing 8 :valign "center"
                 (label :class "row-check" :text {d.connected ? "✓" : ""})
                 (label :class "row-name" :text {d.name} :halign "start" :hexpand true
@@ -186,24 +217,13 @@
   :focusable false
   (bt-panel))
 
-(defwindow bt-backdrop
-  :monitor 0
-  :geometry (geometry :width "100%" :height "100%" :anchor "center")
-  :stacking "overlay"
-  :focusable false
-  :namespace "eww-backdrop"
-  (button :class "backdrop" :onclick "~/.config/eww/scripts/menu-toggle.sh bt"
-          :hexpand true :vexpand true))
-
 ;; ─── Volume / brightness slider popups (independent) ────────────────────────
 ;; Each is just a bare iOS-style slider (no card, no label) with the icon
 ;; overlaid inside the left. Opened from its own bar icon; values poll only while
 ;; that popup is open.
-(defvar volume_open false)
-(defvar brightness_open false)
-(defpoll vol_pct :interval "2s" :run-while volume_open :initial "0"
+(defpoll vol_pct :interval "2s" :run-while {menu == "volume"} :initial "0"
   `~/.config/eww/scripts/controls.sh get-volume`)
-(defpoll bri_pct :interval "2s" :run-while brightness_open :initial "0"
+(defpoll bri_pct :interval "2s" :run-while {menu == "brightness"} :initial "0"
   `~/.config/eww/scripts/controls.sh get-brightness`)
 
 ;; The visual is a fixed-size rounded box whose background is a linear-gradient:
@@ -218,7 +238,13 @@
          :style "background-image: linear-gradient(to right, rgba(255,255,255,0.45) ${vol_pct}%, rgba(255,255,255,0.2) ${vol_pct}%);")
     (box :class "islider-icon" :halign "start" :valign "center"
          :style "background-image: url('${vol_icon}');")
+    ;; NOT detached, unlike every other handler here: a drag fires this many
+    ;; times a second and each one must land in order, which `setsid -f` can't
+    ;; promise. wpctl/brightnessctl are local and fast, so blocking is fine — but
+    ;; :timeout must beat eww's 200ms default or a slow set gets SIGKILLed
+    ;; mid-write and the slider and the real volume drift apart.
     (scale :class "islider-input" :hexpand true :value vol_pct :min 0 :max 100 :round-digits 0
+           :timeout "2s"
            :onchange "eww update vol_pct={} && ~/.config/eww/scripts/controls.sh set-volume {}")))
 
 (defwidget bri-slider []
@@ -228,6 +254,7 @@
     (box :class "islider-icon" :halign "start" :valign "center"
          :style "background-image: url('${bri_icon}');")
     (scale :class "islider-input" :hexpand true :value bri_pct :min 1 :max 100 :round-digits 0
+           :timeout "2s"        ;; see the vol-slider note above
            :onchange "eww update bri_pct={} && ~/.config/eww/scripts/controls.sh set-brightness {}")))
 
 (defwindow volume-menu
@@ -235,27 +262,18 @@
   :stacking "overlay" :focusable false
   (vol-slider))
 
-(defwindow volume-backdrop
-  :monitor 0 :geometry (geometry :width "100%" :height "100%" :anchor "center")
-  :stacking "overlay" :focusable false :namespace "eww-backdrop"
-  (button :class "backdrop" :onclick "~/.config/eww/scripts/menu-toggle.sh volume"
-          :hexpand true :vexpand true))
-
 (defwindow brightness-menu
   :monitor 0 :geometry (geometry :anchor "top right" :x "8px" :y "4px" :width "260px")
   :stacking "overlay" :focusable false
   (bri-slider))
 
-(defwindow brightness-backdrop
-  :monitor 0 :geometry (geometry :width "100%" :height "100%" :anchor "center")
-  :stacking "overlay" :focusable false :namespace "eww-backdrop"
-  (button :class "backdrop" :onclick "~/.config/eww/scripts/menu-toggle.sh brightness"
-          :hexpand true :vexpand true))
-
 ;; ─── Screenshot preview menu ────────────────────────────────────────────────
 ;; screenshot.sh (bound to Print) captures a slurp region with grim, then opens
 ;; this menu top-right showing the shot with Copy / Save actions. Same open +
-;; full-screen backdrop pattern as the Wi-Fi/BT menus. The shot is rendered as a
+;; full-screen backdrop pattern as the Wi-Fi/BT menus — but with its OWN open var
+;; and backdrop, deliberately outside the `menu` state machine (see the top-bar
+;; menu-state note above): this is a keybind popup, not a bar dropdown, so it
+;; neither closes nor is closed by them. The shot is rendered as a
 ;; rounded background-image box (the dock/status-icon idiom) sized by the script
 ;; to the captured aspect ratio, so it clips to rounded corners and never distorts.
 (defvar shot_open false)
@@ -268,11 +286,11 @@
     (box :class "shot-preview" :halign "center"
          :style "background-image: url('${shot_path}'); min-width: ${shot_w}px; min-height: ${shot_h}px;")
     (box :class "shot-actions" :space-evenly true :spacing 8
-      (button :class "shot-btn" :onclick "~/.config/eww/scripts/shot-action.sh copy"
+      (button :class "shot-btn" :onclick "setsid -f ~/.config/eww/scripts/shot-action.sh copy"
         (label :text "Copy"))
-      (button :class "shot-btn" :onclick "~/.config/eww/scripts/shot-action.sh save"
+      (button :class "shot-btn" :onclick "setsid -f ~/.config/eww/scripts/shot-action.sh save"
         (label :text "Save"))
-      (button :class "shot-btn" :onclick "~/.config/eww/scripts/shot-action.sh discard"
+      (button :class "shot-btn" :onclick "setsid -f ~/.config/eww/scripts/shot-action.sh discard"
         (label :text "Discard")))))
 
 (defwindow shot-menu
@@ -282,13 +300,16 @@
   :focusable false
   (shot-panel))
 
+;; Its own click-catcher, not the shared `menu-backdrop` — a click outside must
+;; dismiss only the shot, leaving any bar menu alone. Same :namespace so the
+;; Hyprland blur rule skips it (see the menu-backdrop note above).
 (defwindow shot-backdrop
   :monitor 0
   :geometry (geometry :width "100%" :height "100%" :anchor "center")
   :stacking "overlay"
   :focusable false
   :namespace "eww-backdrop"
-  (button :class "backdrop" :onclick "~/.config/eww/scripts/shot-action.sh close"
+  (button :class "backdrop" :onclick "setsid -f ~/.config/eww/scripts/shot-action.sh close"
           :hexpand true :vexpand true))
 
 ;; :exclusive true reserves the 24px strip so windows tile below the bar rather

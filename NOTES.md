@@ -24,7 +24,7 @@ with (h/m/l) to indicate priority.
 
 # Top Bar
 
-- [ ] (h) Clicking outside of a sub-widget should hide that subwidget
+- [x] (h) Clicking outside of a sub-widget should hide that subwidget
 - [ ] (l) Pressing ESC when a sub-widget is shown should high it
 
 ## Battery

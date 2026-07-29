@@ -17,7 +17,7 @@ LOG="${XDG_CACHE_HOME:-$HOME/.cache}/eww-bt.log"
 log() { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*" >>"$LOG"; }
 notify() { command -v notify-send >/dev/null 2>&1 && notify-send "Bluetooth" "$1" || true; }
 refresh() { $EWW update bt="$(~/.config/eww/scripts/bt-list.sh)" 2>/dev/null; }
-close_menu() { $EWW update bt_open=false bt_connecting="" 2>/dev/null; $EWW close bt-menu bt-backdrop 2>/dev/null; }
+close_menu() { $EWW update bt_connecting="" 2>/dev/null; ~/.config/eww/scripts/menu.sh close; }
 
 case "${1:-}" in
   toggle)

@@ -30,5 +30,8 @@ case "${1:-close}" in
   close) ;;
 esac
 
+# Not routed through menu.sh: the shot menu is independent of the top-bar
+# dropdowns and owns its own var + backdrop, so dismissing it must not touch
+# `menu`. Safe to do directly here — this script is the only thing that closes it.
 $EWW update "shot_open=false"
 $EWW close shot-menu shot-backdrop 2>/dev/null

@@ -13,8 +13,8 @@ EWW="eww"
 THEME="$HOME/.config/rofi/themes/menu.rasi"
 notify() { command -v notify-send >/dev/null 2>&1 && notify-send "Wi-Fi" "$1" || true; }
 close_menu() {
-    $EWW update wifi_open=false wifi_connecting="" 2>/dev/null
-    $EWW close wifi-menu wifi-backdrop 2>/dev/null
+    $EWW update wifi_connecting="" 2>/dev/null
+    ~/.config/eww/scripts/menu.sh close
 }
 
 case "${1:-}" in

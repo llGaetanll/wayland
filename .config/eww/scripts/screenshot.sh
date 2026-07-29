@@ -38,14 +38,14 @@ if ! [[ "$x" =~ ^[0-9]+$ && "$y" =~ ^[0-9]+$ && "$w" =~ ^[0-9]+$ && "$h" =~ ^[0-
   rm -f "$full"; exit 1
 fi
 
-# Serialise the eww window mutation from here (a second Print can't race it), and
-# close any menu still open from a previous shot before opening a fresh one — eww
-# 0.5.0 does NOT dedupe opens, so re-opening an open window orphans a surface.
+# Serialise the eww window mutation from here so a second Print can't race this
+# one. This is the shot menu's OWN lock and open-state — it is independent of the
+# top-bar dropdowns (menu.sh / the `menu` var), so taking a screenshot leaves any
+# open bar menu exactly where it was.
 exec 9>"$STAGE_DIR/.lock"
 flock 9
-if [ "$($EWW get shot_open 2>/dev/null)" = true ]; then
-  $EWW close shot-menu shot-backdrop 2>/dev/null
-fi
+was_open=false
+[ "$($EWW get shot_open 2>/dev/null)" = true ] && was_open=true
 
 # Crop the clean full grab to the selection. Fresh filename per shot: eww/GTK cache
 # background-images by path, so reusing one path would show the PREVIOUS shot.
@@ -67,5 +67,9 @@ else
   ph=$h
 fi
 
+# Push the content first, then open only if it isn't already up: eww 0.5.0 does
+# NOT dedupe opens, and re-opening an open window orphans a layer surface that
+# `close` can never reap. When the menu IS already up, the vars above just swap
+# the preview in place, which is the behaviour we want for a second Print.
 $EWW update "shot_path=$file" "shot_w=$pw" "shot_h=$ph" "shot_open=true"
-$EWW open-many shot-backdrop shot-menu
+[ "$was_open" = true ] || $EWW open-many shot-backdrop shot-menu

@@ -55,8 +55,17 @@
   background-repeat: no-repeat;
   background-position: center;
   background-size: contain;
+  margin-left: 8px;   // the status box has no :spacing (see below), so space it here
 }
 
+// The clickable area. GTK sizes a button to its child, so with no padding the
+// hit target was exactly the 16x16 icon — that's why the bar felt like it
+// needed pixel-perfect aiming. The padding here does double duty: it's the
+// visual gap between icons AND part of the button, so the whole 24x22 cell is
+// clickable and neighbouring cells are contiguous (statusicons has :spacing 0).
+.sicon {
+  padding: 3px 4px;
+}
 .sicon:hover { opacity: 0.6; }
 
 
