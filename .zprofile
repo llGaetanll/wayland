@@ -1,4 +1,5 @@
 export PATH="$PATH:$(du "$HOME/.local/bin" | cut -f2 | paste -sd ':')"
+export PATH="$HOME/.cargo/bin:$PATH"
 
 export EDITOR="nvim"
 export TERMINAL="alacritty"
