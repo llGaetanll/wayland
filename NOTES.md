@@ -34,14 +34,12 @@ with (h/m/l) to indicate priority.
 
 ## Bluetooth
 - [ ] (l) Display currently connected-to devices
-- [ ] (h) Module often will no close for no obvious reason
+- [x] (h) Module often will not close for no obvious reason
 
 ## WiFi
 - [ ] (l) Display currently connected-to wifi
 
 # Desktop Switcher
-- [ ] (h) When multiple firefox windows are opened, if one is fullscreened, the
-  other becomes unaccessible
 - [ ] (m) Build multi-desktop preview
 
 # Search
