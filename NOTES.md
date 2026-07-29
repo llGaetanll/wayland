@@ -6,8 +6,8 @@ with (h/m/l) to indicate priority.
   rest of the system. Only two colors for now: `background`, and `accent`.
   `background` should be the current background color used by subwidgets in the
   top bar. `accent` should be an appropriate shade blue.
-- [ ] (m) Clean up hyperland.lua files into cleaner structure. Ease off on prolific
-  comments
+- [ ] (m) Clean up hyperland.lua files into cleaner structure.
+- [ ] (m) Ease off on prolific comments in code files
 - [ ] (m) Might want to subdivide ~/.config/eww/scripts directory into
   subfolders for each module. Cleaner and more maintainable
 - [ ] (m) Add minimize button to title bar. Minimized window should go into the
@@ -17,6 +17,8 @@ with (h/m/l) to indicate priority.
   containing the slider is too transparent. The color of the box containing the
   slider should be the background color used by the sub-widgets, and the color
   of the slider should be the accent color.
+- [ ] Define clean system key bindings in hyperland to open important programs
+  or tile windows at will
 
 # Neovim
 - [x] (h) `.yuck` files still not syntax highlighted in buffers, even though
@@ -52,4 +54,7 @@ with (h/m/l) to indicate priority.
   the left, preview window on the right. This also matches the mac-os experience
   more closely.
 
+# Desktop Widgets
+- [ ] (l) Build weather widget
+- [ ] (l) Build calendar widget
 
