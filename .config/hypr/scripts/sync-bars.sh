@@ -14,11 +14,18 @@
 # and directly from mac-fullscreen.sh, so the bars track fullscreening, swiping
 # between Spaces, and closing a fullscreen app.
 #
-# Both bars are now eww windows with absolute `eww open/close`. The top bar is
-# :exclusive so it reserves space; we read the monitor's reserved area as the
-# source of truth for "is it shown" and it can never drift. Both are driven on
-# the same transitions so they stay in lockstep. A lock + short settle
-# serialises back-to-back events.
+# Visibility is SHARED: either both the top bar and the dock are shown, or neither
+# is. `want_hidden` below is that single decision, and both windows are always
+# driven the same way.
+#
+# They are two separate eww windows though, so we compare each against its own
+# ACTUAL open state (from `eww active-windows`) rather than inferring both from one
+# proxy like the bar's reserved area. The dock is non-exclusive and reserves
+# nothing, so a proxy can't see it; and if the two ever drift apart (daemon
+# restart, a manual `eww close`, a failed open) a shared proxy reports one value
+# for both and the stuck one can never be corrected. Checking each is self-healing:
+# every event pulls them back into agreement. A lock + short settle serialises
+# back-to-back events.
 
 runtime="${XDG_RUNTIME_DIR:-/tmp}/mac-fs"
 mkdir -p "$runtime"
@@ -43,16 +50,24 @@ for f in "$runtime"/0x*; do
     case "$alladdr" in *"$a"*) ;; *) rm -f "$f" ;; esac
 done
 
-# Are the bars currently shown? -> the top bar (eww, :exclusive) is reserving
-# space. (The eww dock is non-exclusive and never reserves, so it follows here.)
-shown=$(hyprctl monitors -j | jq '.[0].reserved | map(. > 0) | any')
+# Which eww windows are actually open right now? `eww active-windows` prints
+# `<id>: <name>` per open window; strip to bare names. If the daemon is down this
+# is empty, so the "not open" branch below will (re)open + bootstrap it.
+opened=$(eww active-windows 2>/dev/null | sed 's/^[^:]*: //')
+is_open() { printf '%s\n' "$opened" | grep -qx "$1"; }
 
-if [ "$want_hidden" = "true" ] && [ "$shown" = "true" ]; then
-    eww close bar 2>/dev/null    # hide top bar
-    eww close dock 2>/dev/null   # hide dock
-    sleep 0.25                   # let the reserved area settle before the lock frees
-elif [ "$want_hidden" = "false" ] && [ "$shown" = "false" ]; then
-    eww open bar 2>/dev/null     # show top bar
-    eww open dock 2>/dev/null    # show dock
-    sleep 0.25
+# Drive each window independently to the desired state; only touch the ones that
+# are actually out of place, so a steady desktop/Space is a cheap no-op.
+changed=0
+if [ "$want_hidden" = "true" ]; then
+    is_open bar  && { eww close bar  2>/dev/null; changed=1; }   # hide top bar
+    is_open dock && { eww close dock 2>/dev/null; changed=1; }   # hide dock
+else
+    is_open bar  || { eww open bar  2>/dev/null; changed=1; }    # show top bar
+    is_open dock || { eww open dock 2>/dev/null; changed=1; }    # show dock
 fi
+
+# Let the reserved area (top bar is :exclusive) settle before the lock frees, so
+# back-to-back events don't race the compositor's relayout.
+[ "$changed" = 1 ] && sleep 0.25
+exit 0
