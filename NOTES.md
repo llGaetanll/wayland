@@ -19,7 +19,7 @@ with (h/m/l) to indicate priority.
   of the slider should be the accent color.
 
 # Neovim
-- [ ] (h) `.yuck` files still not syntax highlighted in buffers, even though
+- [x] (h) `.yuck` files still not syntax highlighted in buffers, even though
   grammar is installed in TreeSitter
 
 # Top Bar
