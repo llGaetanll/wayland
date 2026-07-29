@@ -1,13 +1,9 @@
 #!/usr/bin/env bash
-# Echo the path of the WhiteSur symbolic icon matching the current state of one
-# status module, for the eww top bar to show via CSS `background-image`.
+# Echo the path of the icon matching the current state of one status module, for
+# the eww top bar to show via CSS `background-image`. eww polls this and the icon
+# reloads whenever the returned path changes.
 #
 #   status.sh <volume|brightness|network|bluetooth>
-#
-# The SVGs (~/.config/eww/icons) are natively dark (#363636) — right for the
-# light bar as-is. This is the state logic from the old waybar statusbar-icon.sh
-# with the PNG rasterise + waybar signalling stripped out; eww just polls it and
-# the icon reloads whenever the returned path changes.
 set -uo pipefail
 
 ICONS="$HOME/.config/eww/icons"

@@ -1,21 +1,18 @@
 #!/usr/bin/env bash
-# Dock app registry + order, with drag-to-swap support.
+# Dock app registry and order, with drag-to-swap support.
 #
-# The dock's *contents* (which apps, their launch command + icon) live in the
-# `reg_*` registry below. The dock's *order* is the only mutable state and is
-# persisted to $ORDER_FILE (one app id per line). `list` emits the apps as JSON
-# in the current order for eww's `dock_apps` var; `swap A B` exchanges two ids in
-# the order file and pushes the new list straight into eww so the dock reorders
-# live (no poll wait).
+# Contents live in the `reg_*` registry below. Order is the only mutable state,
+# persisted to $ORDER_FILE one app id per line. `list` emits the apps as JSON for
+# eww's `dock_apps` var; `swap A B` exchanges two ids and pushes the new list
+# into eww so the dock reorders live rather than on the next poll.
 
 set -euo pipefail
 
 ORDER_FILE="$HOME/.config/eww/dock-order"
 
-# ─── App registry ───────────────────────────────────────────────────────────
-# To add/remove a dock app: add an id here (cmd + icon) and, if you want it in a
-# specific spot, add the id to DEFAULT_ORDER. Unknown ids in the order file are
-# skipped; registry apps missing from the order file are appended.
+# To add an app: add an id here (cmd + icon), and to DEFAULT_ORDER if you want a
+# specific spot. Unknown ids in the order file are skipped; registry apps missing
+# from it are appended.
 reg_cmd() {
   case "$1" in
     firefox)   echo "firefox" ;;
@@ -38,9 +35,8 @@ reg_icon() {
 }
 DEFAULT_ORDER=(firefox alacritty nemo discord signal)
 
-# ─── Order file ──────────────────────────────────────────────────────────────
-# Read the persisted order, drop unknown ids, then append any registry app that
-# isn't listed yet (so newly-added apps show up without editing the file).
+# Read the persisted order, drop unknown ids, then append any registry app not
+# listed yet, so newly-added apps show up without editing the file.
 read_order() {
   local -a order=()
   if [[ -f "$ORDER_FILE" ]]; then
@@ -59,7 +55,6 @@ read_order() {
 
 write_order() { printf '%s\n' "$@" > "$ORDER_FILE"; }
 
-# ─── Commands ────────────────────────────────────────────────────────────────
 cmd_list() {
   local -a order
   mapfile -t order < <(read_order)

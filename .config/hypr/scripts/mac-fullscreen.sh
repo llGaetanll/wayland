@@ -1,19 +1,14 @@
 #!/bin/sh
-# Close helper for the macOS-Spaces window management.
+# Close helper for the macOS-Spaces window management, invoked as
+# `mac-fullscreen.sh close` by the red traffic-light button and SUPER+Q.
 #
-# Enter/exit fullscreen is NO LONGER handled here — it's driven by the
-# window.fullscreen event handler in hyprland.lua (see the "macOS-like fullscreen
-# Spaces" section). This script only handles CLOSING, which the event model can't
-# do cleanly on its own (closing a window doesn't emit a fullscreen-exit event,
-# and returning to the origin Space is multi-step).
+# Entering and exiting fullscreen is handled by the window.fullscreen handler in
+# hyprland.lua; only closing lives here, since closing emits no fullscreen-exit
+# event and returning to the origin Space is multi-step.
 #
-# Invoked as `mac-fullscreen.sh close` by the red traffic-light button and by
-# SUPER+Q. If the focused window is in its own fullscreen Space — i.e. the event
-# handler left it an origin state file under $XDG_RUNTIME_DIR/mac-fs/ named after
-# its address — we first hop back to the Space it was spawned on, so the now-empty
-# Space is left behind for Hyprland to auto-destroy (an empty Space that is still
-# focused would otherwise linger). Then we close the window. A normal window is
-# just closed.
+# If the focused window has an origin state file under $XDG_RUNTIME_DIR/mac-fs/,
+# it's in its own Space, so hop back to where it was spawned before closing —
+# an emptied Space that is still focused lingers instead of auto-destroying.
 
 set -u
 
@@ -37,6 +32,6 @@ if [ -f "$statefile" ]; then
 fi
 dispatch "hl.dsp.window.close({ window = 'address:$addr' })"
 
-# Give the bars back now that we're on a desktop Space (window.close also fires
-# sync-bars from hyprland.lua, but this is more immediate). Idempotent + locked.
+# Give the bars back immediately; window.close also fires sync-bars from
+# hyprland.lua, but later. Idempotent and locked.
 "$(dirname "$0")/sync-bars.sh"

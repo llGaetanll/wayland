@@ -1,14 +1,9 @@
-/* ============================================================================
- * Custom Nemo styling — macOS Finder look, hand-rolled.
- *
- * Loaded by GTK3 automatically on top of the base theme (Adwaita, set in
- * settings.ini). Scoped under `.nemo-window` so no other GTK3 app is affected.
- * Scope + `.primary-toolbar` / `toolbar` / `statusbar` confirmed to match via
- * live probing (no GTK inspector in this build). Sidebar handle still being
- * pinned down — see the SIDEBAR PROBE block.
- * ========================================================================== */
+/* Nemo styling, macOS Finder look. Loaded by GTK3 on top of the base theme set
+ * in settings.ini, and scoped under `.nemo-window` so no other GTK3 app is
+ * affected. The sidebar handle is still being pinned down; see the sidebar probe
+ * block at the bottom. */
 
-/* --- Palette (macOS Big Sur, light) -------------------------------------- */
+/* Palette (macOS Big Sur, light) */
 @define-color mac_accent        #0a84ff;
 @define-color mac_content_bg     #ffffff;
 @define-color mac_sidebar_bg     #e6e6ea;   /* clearly-visible gray for now    */
@@ -18,7 +13,7 @@
 @define-color mac_text_dim       #86868b;
 @define-color mac_hover          alpha(#000000, 0.06);
 
-/* --- Toolbar ------------------------------------------------------------- */
+/* Toolbar */
 .nemo-window .primary-toolbar {
     background-color: @mac_toolbar_bg;
     border-bottom: 1px solid @mac_border;
@@ -52,7 +47,7 @@
     box-shadow: inset 0 0 0 1px @mac_accent;
 }
 
-/* --- Content area + rounded blue selection (the Finder signature) -------- */
+/* Content area + rounded blue selection (the Finder signature) */
 .nemo-window .view {
     background-color: @mac_content_bg;
     color: @mac_text;
@@ -72,7 +67,7 @@
 }
 .nemo-window treeview.view:hover { background-color: @mac_hover; }
 
-/* --- Statusbar ----------------------------------------------------------- */
+/* Statusbar */
 .nemo-window statusbar,
 .nemo-window .nemo-statusbar {
     background-color: @mac_toolbar_bg;
@@ -81,14 +76,10 @@
     font-size: 0.9em;
 }
 
-/* ============================================================================
- * SIDEBAR PROBE — two candidate handles, distinguishable effects, so ONE
- * screenshot reveals which one is real. Reverted to clean styling next pass.
- *   - candidate 1 (class):  solid gray background
- *   - candidate 2 (w-name): thick purple right border
- * The main file view is an ICON view (a canvas, not a treeview), so in icon
- * mode the ONLY treeview on screen is the sidebar — candidate 3 uses that.
- * ========================================================================== */
+/* Sidebar probe: three candidate handles with distinguishable effects, so one
+ * screenshot reveals which is real. Candidate 3 works because the main file view
+ * is an icon view, leaving the sidebar as the only treeview on screen. To be
+ * replaced with clean styling once identified. */
 .nemo-window .nemo-places-sidebar { background-color: @mac_sidebar_bg; }        /* 1 */
 .nemo-window #nemo-places-sidebar { border-right: 8px solid #7b2ff7; }          /* 2 */
 .nemo-window scrolledwindow treeview:not(.view) { background-color: #ffd400; }  /* 3 */

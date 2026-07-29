@@ -1,14 +1,10 @@
 #!/usr/bin/env bash
-# iPhone-style battery pill for the eww top bar. Generates an SVG (rounded body +
-# terminal nub + proportional level-fill + centred haloed number) and echoes its
-# path; eww shows it via CSS `background-image`.
+# iPhone-style battery pill for the eww top bar. Generates an SVG and echoes its
+# path, which eww shows via CSS `background-image`.
 #
-# The filename encodes cap+status, so the path changes exactly when the pill's
-# look changes — that's what makes eww/GTK reload the image (a fixed path with
-# new bytes would not). Stale variants are pruned each run.
-#
-# Adapted from the old waybar battery-pill.sh (dropped the waybar RTMIN signal
-# and the JSON output; the pill is self-contained so it reads on a light bar).
+# The filename encodes capacity and status, so the path changes exactly when the
+# pill's look does — that's what makes eww and GTK reload the image, since a
+# fixed path with new bytes would not. Stale variants are pruned each run.
 set -uo pipefail
 
 BAT=/sys/class/power_supply/BAT0

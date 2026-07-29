@@ -1,16 +1,11 @@
 /*
- * macOS Spotlight–style theme for rofi.
- *
- * Palette is deliberately the same as the eww dock
- * (~/.config/eww/eww.scss): rgba(40,40,40,0.85) fill, white text, Inter.
- * That way the launcher, dock, and titlebars all read as one system.
- *
- * The translucency only looks "frosted" if the compositor blurs the surface
- * behind it — see the `layerrule blur, rofi` in hyprland.lua.
+ * macOS Spotlight-style theme for rofi. The palette matches the eww dock so the
+ * launcher, dock, and titlebars read as one system. The translucency only looks
+ * frosted because of the rofi-blur layer rule in hyprland.lua.
  */
 
 * {
-    /* --- palette (keep in sync with eww/eww.scss) --- */
+    /* palette, keep in sync with eww/eww.scss */
     bg:      rgba(40, 40, 40, 0.85);   /* window fill */
     fg:      #ffffff;                  /* primary text */
     muted:   rgba(235, 235, 235, 0.55);/* placeholder / secondary */
@@ -39,7 +34,6 @@ mainbox {
     padding:  0;
 }
 
-/* --- search field --- */
 inputbar {
     children: [ entry ];
     padding:  16px 22px;
@@ -55,13 +49,10 @@ entry {
     vertical-align:    0.5;
 }
 
-/* --- results --- */
 listview {
-    /* Resize the box to the number of matches (up to `lines` rows), mac-style.
-       This changes the layer-surface size on every keystroke; the resize looks
-       clean only because Hyprland is told not to animate the rofi layer
-       (no_anim = true on the layer_rule in hyprland.lua). Without that, the
-       per-keystroke resize animates into a "morphing/bending text" effect. */
+    /* Resizes to the number of matches, which changes the layer-surface size on
+       every keystroke. That only looks clean because hyprland.lua sets
+       no_anim on the rofi layer; otherwise the text visibly morphs. */
     dynamic:      true;
     fixed-height: false;
     lines:        8;

@@ -1,24 +1,19 @@
 /* macOS-style traffic-light window controls, inline in the Firefox tab strip.
  *
- * This file lives in the dotfiles (~/.config/firefox/chrome/) and is symlinked
- * into the active Firefox profile's chrome/ directory. Requires the pref
- * toolkit.legacyUserProfileCustomizations.stylesheets = true (set via user.js).
+ * Symlinked into the active Firefox profile's chrome/ directory. Requires
+ * toolkit.legacyUserProfileCustomizations.stylesheets = true, set via user.js.
  *
- * Context: Hyprland hides the hyprbars title bar for Firefox (hyprbars:no_bar
- * rule in hyprland.lua), so Firefox's own tab strip IS the title bar. We move
- * Firefox's window-control buttons to the far left of the tabs and restyle them
- * as colored dots matching the hyprbars buttons elsewhere:
- *   red   (#ff5f57) = close
- *   green (#28c840) = maximize / restore
- * Minimize is omitted (Hyprland has no minimize), matching the hyprbars pair.
- */
+ * hyprland.lua hides the hyprbars title bar for Firefox, so its tab strip is the
+ * title bar. The window controls move to the far left of the tabs and are
+ * restyled as dots matching the hyprbars buttons elsewhere. Minimize is omitted,
+ * since Hyprland has none. */
 
 :root {
   --tl-dot: 13px;   /* dot diameter */
   --tl-gap: 8px;    /* gap between dots */
 }
 
-/* --- Placement: window controls at the far left of the tab strip --- */
+/* Placement: window controls at the far left of the tab strip */
 #TabsToolbar .titlebar-buttonbox-container {
   order: -1 !important;
   display: flex !important;
@@ -36,8 +31,6 @@
   gap: var(--tl-gap) !important;
 }
 
-/* --- Which buttons show --- */
-/* No minimize dot. */
 .titlebar-min {
   display: none !important;
 }
@@ -55,7 +48,7 @@
   display: flex !important;
 }
 
-/* --- Appearance: colored dots --- */
+/* Appearance: colored dots */
 .titlebar-button {
   appearance: none !important;
   -moz-appearance: none !important;
@@ -70,16 +63,14 @@
   background-position: center !important;
 }
 
-/* Hide the native glyphs — we want plain colored dots (like the hyprbars ones,
- * which only reveal a glyph on hover; here we keep them clean). */
+/* Hide the native glyphs; these dots stay plain even on hover. */
 .titlebar-button > .toolbarbutton-icon,
 .titlebar-button > .titlebar-icon {
   display: none !important;
 }
 
-/* Order left-to-right: red (close) then green (maximize), matching the hyprbars
- * buttons on the rest of the system. Firefox's DOM order is min->max->close, so
- * without this the visible pair renders green-then-red (reversed). */
+/* Firefox's DOM order is min->max->close, so without this the pair renders
+ * green-then-red, reversed from the hyprbars buttons elsewhere. */
 .titlebar-close {
   order: 0 !important;
   background-color: #ff5f57 !important;

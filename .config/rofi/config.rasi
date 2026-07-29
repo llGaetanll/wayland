@@ -1,18 +1,13 @@
 /*
  * rofi behaviour. See themes/spotlight.rasi for the look.
  *
- * NOTE: keep the configuration {} block below free of comments. rofi 2.0's
- * parser drops the property that immediately follows a multi-line comment
- * placed *inside* the block, so all documentation lives out here instead:
+ * Keep the configuration block below free of comments: rofi 2.0's parser drops
+ * the property immediately following a multi-line comment placed inside it, so
+ * the notes live out here.
  *
- *   modes             -> drun (launch .desktop apps), run (raw binaries),
- *                        window (switch between open windows). Ctrl+Tab /
- *                        Shift+Right cycle between them (rofi 2.0 defaults).
- *   icon-theme        -> swap "Adwaita" for "WhiteSur" once that icon theme is
- *                        installed, to match the rest of the system.
- *   drun-match-fields -> match on more than the visible name, so fuzzy typing
- *                        finds apps by category/keyword (e.g. "browser").
- *   Escape cancels; both are rofi defaults so they need no binding here.
+ * icon-theme: swap Adwaita for WhiteSur once that icon theme is installed.
+ * drun-match-fields matches more than the visible name, so fuzzy typing finds
+ * apps by category or keyword.
  */
 
 configuration {
