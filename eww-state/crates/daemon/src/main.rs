@@ -1,0 +1,107 @@
+//! `eww-state` — the daemon that owns the desktop widgets' state, and the CLI
+//! the widgets themselves call.
+//!
+//! All the decisions live in `eww-state-core`, which does no IO. This crate is
+//! the shell around it: it samples the world, runs commands, and pushes the
+//! result into eww.
+
+mod act;
+mod eww;
+mod hypr;
+mod ipc;
+mod paths;
+mod probe;
+mod proc;
+mod reconcile;
+mod runtime;
+mod svg;
+mod ticker;
+
+use paths::Paths;
+
+const USAGE: &str = "\
+eww-state — widget state daemon
+
+  eww-state daemon              run the daemon (start this from the compositor)
+
+  eww-state menu toggle <wifi|bt|volume|brightness>
+  eww-state menu close
+  eww-state volume set <0-100>
+  eww-state brightness set <1-100>
+  eww-state wifi toggle | wifi connect <ssid-base64> | wifi rescan
+  eww-state bt toggle | bt connect <mac-base64>
+  eww-state dock launch <id> | dock swap <a> <b>
+  eww-state shot capture | shot <copy|save|discard|close>
+  eww-state refresh <probe>
+
+  eww-state dump | vars | windows | polls | ping
+";
+
+fn main() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let paths = Paths::discover();
+
+    match args.first().map(String::as_str) {
+        None | Some("-h") | Some("--help") | Some("help") => {
+            print!("{USAGE}");
+        }
+        Some("daemon") => {
+            if let Err(e) = runtime::run(paths) {
+                eprintln!("eww-state: {e}");
+                std::process::exit(1);
+            }
+        }
+        _ => client(&paths, &args),
+    }
+}
+
+fn client(paths: &Paths, args: &[String]) {
+    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    // Check the command here as well as in the daemon, so a typo fails loudly
+    // at the caller instead of being swallowed by a widget handler.
+    if let Err(e) = ipc::parse(&refs) {
+        eprintln!("eww-state: {e}");
+        std::process::exit(2);
+    }
+    match ipc::request(&paths.socket, args) {
+        Ok(reply) => {
+            let reply = reply.trim_end();
+            if let Some(err) = reply.strip_prefix("error: ") {
+                eprintln!("eww-state: {err}");
+                std::process::exit(1);
+            }
+            if !reply.is_empty() && reply != "ok" {
+                println!("{reply}");
+            }
+        }
+        Err(e) => {
+            eprintln!("eww-state: daemon not reachable ({e})");
+            std::process::exit(1);
+        }
+    }
+}
+
+/// The shared accent colour, without its leading `#`, for theming slurp.
+///
+/// Read from `~/.config/colors.sh`, the same file the stylesheets mirror, so
+/// there is one place to change it.
+pub fn accent_hex() -> String {
+    let fallback = "0a84ff".to_string();
+    let Some(home) = std::env::var_os("HOME") else {
+        return fallback;
+    };
+    let path = std::path::PathBuf::from(home).join(".config/colors.sh");
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return fallback;
+    };
+    text.lines()
+        .find_map(|l| l.trim().strip_prefix("ACCENT="))
+        .map(|v| {
+            v.trim()
+                .trim_matches(|c| c == '"' || c == '\'')
+                .trim_start_matches('#')
+                .to_string()
+        })
+        .filter(|s| !s.is_empty())
+        .unwrap_or(fallback)
+}

@@ -1,0 +1,93 @@
+//! Minimal JSON writer.
+//!
+//! eww vars that widgets index into (`wifi.networks`, `dock_apps`) have to be
+//! JSON text. This is the whole of what we need to produce it; nothing here
+//! parses, so there is no error type.
+
+use std::fmt::{self, Write};
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Json {
+    Bool(bool),
+    Int(i64),
+    Str(String),
+    Arr(Vec<Json>),
+    Obj(Vec<(&'static str, Json)>),
+}
+
+impl Json {
+    pub fn s(v: impl Into<String>) -> Json {
+        Json::Str(v.into())
+    }
+}
+
+impl fmt::Display for Json {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Json::Bool(b) => f.write_str(if *b { "true" } else { "false" }),
+            Json::Int(i) => write!(f, "{i}"),
+            Json::Str(s) => write_str(f, s),
+            Json::Arr(items) => {
+                f.write_char('[')?;
+                for (i, it) in items.iter().enumerate() {
+                    if i > 0 {
+                        f.write_char(',')?;
+                    }
+                    write!(f, "{it}")?;
+                }
+                f.write_char(']')
+            }
+            Json::Obj(fields) => {
+                f.write_char('{')?;
+                for (i, (k, v)) in fields.iter().enumerate() {
+                    if i > 0 {
+                        f.write_char(',')?;
+                    }
+                    write_str(f, k)?;
+                    f.write_char(':')?;
+                    write!(f, "{v}")?;
+                }
+                f.write_char('}')
+            }
+        }
+    }
+}
+
+fn write_str(f: &mut fmt::Formatter<'_>, s: &str) -> fmt::Result {
+    f.write_char('"')?;
+    for c in s.chars() {
+        match c {
+            '"' => f.write_str("\\\"")?,
+            '\\' => f.write_str("\\\\")?,
+            '\n' => f.write_str("\\n")?,
+            '\r' => f.write_str("\\r")?,
+            '\t' => f.write_str("\\t")?,
+            c if (c as u32) < 0x20 => write!(f, "\\u{:04x}", c as u32)?,
+            c => f.write_char(c)?,
+        }
+    }
+    f.write_char('"')
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn escapes_and_nests() {
+        let v = Json::Obj(vec![
+            ("ssid", Json::s("a\"b\\c")),
+            ("on", Json::Bool(true)),
+            ("list", Json::Arr(vec![Json::Int(1), Json::Int(-2)])),
+        ]);
+        assert_eq!(
+            v.to_string(),
+            r#"{"ssid":"a\"b\\c","on":true,"list":[1,-2]}"#
+        );
+    }
+
+    #[test]
+    fn escapes_control_chars() {
+        assert_eq!(Json::s("a\u{1}b").to_string(), r#""a\u0001b""#);
+    }
+}

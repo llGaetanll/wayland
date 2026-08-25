@@ -1,0 +1,11 @@
+[package]
+name = "eww-state"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "eww-state"
+path = "src/main.rs"
+
+[dependencies]
+eww-state-core = { path = "../core" }
