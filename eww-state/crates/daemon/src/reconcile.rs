@@ -171,9 +171,37 @@ mod tests {
             f.calls,
             [
                 "open bar dock",
-                "open wifi-menu menu-backdrop",
+                "open menu-backdrop wifi-menu",
                 "close wifi-menu",
                 "open bt-menu",
+            ]
+        );
+    }
+
+    /// A backdrop is a full-screen click-catcher, and eww stacks a later overlay
+    /// above an earlier one — so opening the panel first buries it, and every
+    /// click on Copy or on a network row lands on the backdrop instead.
+    #[test]
+    fn a_backdrop_opens_before_the_panel_it_sits_behind() {
+        let (mut r, mut f) = (Reconciler::new(), Fake::default());
+        r.sync_windows(
+            &BTreeSet::from([Window::Menu(MenuId::Wifi), Window::MenuBackdrop]),
+            &mut f,
+        );
+        r.sync_windows(
+            &BTreeSet::from([
+                Window::Menu(MenuId::Wifi),
+                Window::MenuBackdrop,
+                Window::Shot,
+                Window::ShotBackdrop,
+            ]),
+            &mut f,
+        );
+        assert_eq!(
+            f.calls,
+            [
+                "open menu-backdrop wifi-menu",
+                "open shot-backdrop shot-menu"
             ]
         );
     }

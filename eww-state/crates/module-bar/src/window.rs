@@ -1,4 +1,14 @@
 //! The eww windows the bar owns.
+//!
+//! **Declaration order is stacking order.** The derived `Ord` decides how these
+//! sort in the set the runtime reconciles against, which decides the order they
+//! are passed to `eww open-many`, which decides which surface ends up on top —
+//! eww stacks a later overlay above an earlier one.
+//!
+//! So every backdrop is declared *before* the panel it sits behind. Get that
+//! backwards and the full-screen click-catcher covers the panel: every click
+//! lands on the backdrop, the panel dismisses itself, and none of its buttons
+//! can ever be pressed.
 
 use crate::menu::MenuId;
 
@@ -6,13 +16,13 @@ use crate::menu::MenuId;
 pub enum Window {
     Bar,
     Dock,
-    Menu(MenuId),
     /// Full-screen click-catcher shared by every bar dropdown.
     MenuBackdrop,
-    Shot,
+    Menu(MenuId),
     /// The screenshot preview's own click-catcher, deliberately separate so a
     /// click outside the preview leaves an open bar menu alone.
     ShotBackdrop,
+    Shot,
 }
 
 impl Window {
