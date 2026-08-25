@@ -1,18 +1,33 @@
-//! Interval scheduling for probes.
+//! Interval scheduling for probes, and the clock the machine runs on.
 //!
 //! Each probe gets one thread that sleeps until its next sample is due. The
-//! interval is not fixed: the state machine recomputes it after every event
+//! interval is not fixed: the state machine recomputes it after every batch
 //! (an open menu wants fresher data than a bar icon), and a change takes effect
 //! immediately rather than after the current sleep runs out.
+//!
+//! One more thread does nothing but read the system clock once a second and
+//! send it in. Sleeping is IO, so the machine cannot do it; the tick is how a
+//! rule that has to wait gets asked again.
 
 use std::collections::BTreeMap;
 use std::sync::mpsc::Sender;
-use std::sync::{Arc, Condvar, Mutex};
-use std::time::{Duration, Instant};
+use std::sync::Arc;
+use std::sync::Condvar;
+use std::sync::Mutex;
+use std::time::Duration;
+use std::time::Instant;
 
-use eww_state_core::{Event, Intent, Probe};
+use eww_state_core::Event;
+use eww_state_core::EventClock;
+use eww_state_core::EventProbe;
+use eww_state_core::Probe;
 
-use crate::runtime::Msg;
+use crate::runtime_daemon::Msg;
+
+/// How often the machine is told what time it is. Coarse on purpose: a rule
+/// needing finer resolution than this is a rule about to depend on scheduling
+/// luck.
+const CLOCK_INTERVAL: Duration = Duration::from_secs(1);
 
 struct TickState {
     interval_ms: u32,
@@ -37,7 +52,7 @@ impl Ticker {
     }
 
     fn set_interval(&self, ms: u32) {
-        let mut s = self.state.lock().expect("ticker mutex");
+        let mut s = self.lock();
         if s.interval_ms != ms {
             s.interval_ms = ms;
             self.cv.notify_all();
@@ -45,9 +60,17 @@ impl Ticker {
     }
 
     fn poke(&self) {
-        let mut s = self.state.lock().expect("ticker mutex");
+        let mut s = self.lock();
         s.pokes += 1;
         self.cv.notify_all();
+    }
+
+    /// A mutex poisoned by another thread's panic still describes a valid
+    /// interval, and refusing to tick would be worse than reading it.
+    fn lock(&self) -> std::sync::MutexGuard<'_, TickState> {
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     /// Block until the next sample is due.
@@ -57,7 +80,7 @@ impl Ticker {
     /// they end with the process.
     fn wait(&self) {
         let start = Instant::now();
-        let mut s = self.state.lock().expect("ticker mutex");
+        let mut s = self.lock();
         let pokes = s.pokes;
         loop {
             if s.pokes != pokes {
@@ -65,7 +88,8 @@ impl Ticker {
             }
             let interval = s.interval_ms;
             if interval == 0 {
-                s = self.cv.wait(s).expect("ticker mutex");
+                let Ok(guard) = self.cv.wait(s) else { return };
+                s = guard;
                 continue;
             }
             let due = Duration::from_millis(interval as u64);
@@ -73,10 +97,9 @@ impl Ticker {
             if elapsed >= due {
                 return;
             }
-            let (guard, _) = self
-                .cv
-                .wait_timeout(s, due - elapsed)
-                .expect("ticker mutex");
+            let Ok((guard, _)) = self.cv.wait_timeout(s, due - elapsed) else {
+                return;
+            };
             s = guard;
         }
     }
@@ -96,19 +119,23 @@ impl Scheduler {
             let ticker = Arc::new(Ticker::new(0));
             tickers.insert(probe, Arc::clone(&ticker));
             let events = events.clone();
-            std::thread::Builder::new()
-                .name(format!("tick-{}", probe.as_str()))
-                .spawn(move || loop {
-                    ticker.wait();
-                    if events
-                        .send(Msg::Ev(Event::Intent(Intent::Refresh(probe))))
-                        .is_err()
-                    {
-                        break;
-                    }
-                })
-                .expect("spawn ticker thread");
+            spawn(&format!("tick-{}", probe.as_str()), move || loop {
+                ticker.wait();
+                let due = Event::FromProbe(EventProbe::Due { what: probe });
+                if events.send(Msg::Ev(due)).is_err() {
+                    return;
+                }
+            });
         }
+        spawn("clock", move || loop {
+            std::thread::sleep(CLOCK_INTERVAL);
+            let tick = Event::FromClock(EventClock::Tick {
+                now: Instant::now(),
+            });
+            if events.send(Msg::Ev(tick)).is_err() {
+                return;
+            }
+        });
         Scheduler { tickers }
     }
 
@@ -124,6 +151,13 @@ impl Scheduler {
         for ticker in self.tickers.values() {
             ticker.poke();
         }
+    }
+}
+
+fn spawn(name: &str, f: impl FnOnce() + Send + 'static) {
+    let spawned = std::thread::Builder::new().name(name.to_string()).spawn(f);
+    if let Err(e) = spawned {
+        tracing::error!(error = %e, thread = name, "could not spawn a timer thread");
     }
 }
 

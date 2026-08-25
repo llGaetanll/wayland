@@ -16,6 +16,8 @@ pub struct Paths {
     pub shots: PathBuf,
     /// Where "Save" puts a screenshot.
     pub screenshots: PathBuf,
+    /// The rotating log, under the platform's state directory rather than the
+    /// cache: a log someone is about to send us is not disposable.
     pub log: PathBuf,
 }
 
@@ -30,6 +32,7 @@ impl Paths {
         let home = env_path("HOME").unwrap_or_else(|| PathBuf::from("/tmp"));
         let config = env_path("XDG_CONFIG_HOME").unwrap_or_else(|| home.join(".config"));
         let cache = env_path("XDG_CACHE_HOME").unwrap_or_else(|| home.join(".cache"));
+        let state = env_path("XDG_STATE_HOME").unwrap_or_else(|| home.join(".local/state"));
         let run = env_path("XDG_RUNTIME_DIR").unwrap_or_else(|| PathBuf::from("/tmp"));
 
         Paths {
@@ -40,7 +43,7 @@ impl Paths {
             dock_conf: config.join("eww-state/dock.conf"),
             shots: run.join("eww-shots"),
             screenshots: home.join("Pictures/Screenshots"),
-            log: cache.join("eww-state.log"),
+            log: state.join("eww-state/eww-state.log"),
         }
     }
 

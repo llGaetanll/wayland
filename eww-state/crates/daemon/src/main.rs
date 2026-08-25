@@ -2,22 +2,34 @@
 //! the widgets themselves call.
 //!
 //! All the decisions live in `eww-state-core`, which does no IO. This crate is
-//! the shell around it: it samples the world, runs commands, and pushes the
+//! the runtime around it: it samples the world, runs commands, and pushes the
 //! result into eww.
 
-mod act;
-mod eww;
+mod eww_cli;
 mod hypr;
 mod ipc;
+mod log;
 mod paths;
 mod probe;
+mod probe_audio;
+mod probe_backlight;
+mod probe_battery;
+mod probe_bt;
+mod probe_date;
+mod probe_dock;
+mod probe_net;
+mod probe_theme;
 mod proc;
 mod reconcile;
-mod runtime;
+mod runtime_daemon;
+mod runtime_file;
+mod runtime_probe;
+mod runtime_shell;
 mod svg;
 mod ticker;
 
 use paths::Paths;
+use runtime_daemon::RuntimeDaemon;
 
 const USAGE: &str = "\
 eww-state — widget state daemon
@@ -42,16 +54,20 @@ fn main() {
     let paths = Paths::discover();
 
     match args.first().map(String::as_str) {
-        None | Some("-h") | Some("--help") | Some("help") => {
-            print!("{USAGE}");
-        }
+        // Help and query answers are the program's output rather than a record
+        // of it, so they go to stdout; everything else goes through tracing.
+        None | Some("-h") | Some("--help") | Some("help") => print!("{USAGE}"),
         Some("daemon") => {
-            if let Err(e) = runtime::run(paths) {
-                eprintln!("eww-state: {e}");
+            log::init_daemon(paths.log.clone());
+            if let Err(e) = RuntimeDaemon::run(paths) {
+                tracing::error!(error = %e, "the daemon stopped");
                 std::process::exit(1);
             }
         }
-        _ => client(&paths, &args),
+        _ => {
+            log::init_client();
+            client(&paths, &args);
+        }
     }
 }
 
@@ -60,14 +76,14 @@ fn client(paths: &Paths, args: &[String]) {
     // Check the command here as well as in the daemon, so a typo fails loudly
     // at the caller instead of being swallowed by a widget handler.
     if let Err(e) = ipc::parse(&refs) {
-        eprintln!("eww-state: {e}");
+        tracing::error!("{e}");
         std::process::exit(2);
     }
     match ipc::request(&paths.socket, args) {
         Ok(reply) => {
             let reply = reply.trim_end();
             if let Some(err) = reply.strip_prefix("error: ") {
-                eprintln!("eww-state: {err}");
+                tracing::error!("{err}");
                 std::process::exit(1);
             }
             if !reply.is_empty() && reply != "ok" {
@@ -75,7 +91,7 @@ fn client(paths: &Paths, args: &[String]) {
             }
         }
         Err(e) => {
-            eprintln!("eww-state: daemon not reachable ({e})");
+            tracing::error!(error = %e, "daemon not reachable");
             std::process::exit(1);
         }
     }

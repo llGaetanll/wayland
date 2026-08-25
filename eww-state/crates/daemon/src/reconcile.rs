@@ -5,9 +5,11 @@
 //! eww, which is what keeps the published vars and the open windows from
 //! drifting apart the way they did when every script pushed its own.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
-use eww_state_core::{Vars, Window};
+use eww_state_core::Window;
+use eww_state_core::WireVars;
 
 /// The eww commands we need. Abstracted so the reconciliation logic can be
 /// tested without a compositor.
@@ -56,7 +58,7 @@ impl Reconciler {
         self.forget();
     }
 
-    pub fn sync_vars(&mut self, vars: &Vars, sink: &mut impl EwwSink) {
+    pub fn sync_vars(&mut self, vars: &WireVars, sink: &mut impl EwwSink) {
         let changed: Vec<(&str, &str)> = vars
             .iter()
             .filter(|(k, v)| self.published.get(*k).map(String::as_str) != Some(*v))
@@ -129,8 +131,8 @@ mod tests {
         }
     }
 
-    fn vars(pairs: &[(&'static str, &str)]) -> Vars {
-        let mut v = Vars::default();
+    fn vars(pairs: &[(&'static str, &str)]) -> WireVars {
+        let mut v = WireVars::default();
         for (k, val) in pairs {
             v.set(k, val);
         }

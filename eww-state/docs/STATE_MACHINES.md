@@ -46,9 +46,11 @@ These are settled. A new machine follows all of them.
    private. A `pub` field is a way to mutate state without an event, which is
    the one thing this design exists to prevent.
 
-2. **Time is an argument, not a call.** The clock is read once per batch, at the
-   edge, by the runtime, and handed in. Nothing inside reads one — that is what
-   makes a replay land where it did the first time. Same for randomness and IO.
+2. **Time arrives as an event.** The clock is read at the edge, by the runtime,
+   and sent in as an ordinary event like any other. Nothing inside reads one —
+   that is what makes a replay land where it did the first time. Same for
+   randomness and IO. See [Waiting without sleeping](#waiting-without-sleeping)
+   for why it is an event rather than an argument.
 
 3. **Nothing derived is stored.** Filtering, grouping, totals, the variable
    table, the window list, the poll plan — computed on the way out. A field that
@@ -80,6 +82,53 @@ These are settled. A new machine follows all of them.
    often should this be sampled?" are all arithmetic over state, so they live in
    the machine rather than being guessed at by the runtime.
 
+## Waiting without sleeping
+
+A machine often needs to wait: back off before retrying, hold a notification for
+five seconds, do not re-sample more than once a minute. That is a rule, so by
+rule 8 it belongs in the machine — but sleeping is IO, and the machine cannot do
+IO.
+
+**The runtime ticks; the machine decides.** Once a second the runtime reads the
+system clock and sends it in as an ordinary event:
+
+```rust
+enum EventClock {
+    Tick { now: Instant },
+}
+```
+
+The machine stores it and answers *can I do this yet* from what it holds. The
+tick is what keeps that stored time moving when nothing else is happening.
+
+**The time is a payload, not an argument to `handle_events`.** An argument is
+invisible from the outside: it never appears in the event log, so a recorded
+session cannot be replayed and a bug that depended on the clock cannot be
+reproduced. As an event it is recorded like everything else, and the replay
+lands where it did the first time.
+
+Every waiting rule is then arithmetic the machine can do on the spot:
+
+```rust
+if self.now.duration_since(self.last_sampled) >= self.interval {
+    actions.push(Action::ToProbe(ActionProbe::Sample { what }));
+    self.last_sampled = self.now;
+}
+```
+
+So "wait five seconds, then do X" is never a sleep anywhere. It is *X has not
+happened yet and now is not yet five seconds past* — asked again on every tick,
+answered the same way every time it is replayed.
+
+**A second is close enough.** The machine's clock is a rounded copy of the real
+one, and that is deliberate: a rule needing finer resolution than the tick is a
+rule about to depend on scheduling luck. Pick the tick to suit the coarsest
+thing that has to feel responsive and leave it there.
+
+**A test moves time the same way a program does.** There is no back door for
+tests, no `set_now`: a test that is *about* time sends the tick it wants, which
+is the same event the runtime would have sent.
+
 ## The shape of the types
 
 Events and actions are the vocabulary the whole program shares, so name where
@@ -108,16 +157,17 @@ allocation and a replay can reuse the same one:
 
 ```rust
 impl State {
-    pub fn handle_events(&mut self, now: Instant, events: &[Event], actions: &mut Vec<Action>) {
+    pub fn handle_events(&mut self, events: &[Event], actions: &mut Vec<Action>) {
         for event in events {
-            self.handle_event(now, event, actions);
+            self.handle_event(event, actions);
         }
     }
 
-    fn handle_event(&mut self, now: Instant, event: &Event, actions: &mut Vec<Action>) {
+    fn handle_event(&mut self, event: &Event, actions: &mut Vec<Action>) {
         match event {
-            Event::FromUi(e) => self.handle_event_ui(now, e, actions),
-            Event::FromProbe(e) => self.handle_event_probe(now, e, actions),
+            Event::FromUi(e) => self.handle_event_ui(e, actions),
+            Event::FromClock(e) => self.handle_event_clock(e, actions),
+            Event::FromProbe(e) => self.handle_event_probe(e, actions),
         }
     }
 
@@ -183,8 +233,13 @@ builds — it logs `unknown` rather than nothing. A log without the commit is a
 log that cannot be lined up against a source tree, and the build a report
 arrives for is always one nobody has checked out.
 
-**Use `tracing`.** Not `println!`, not a hand-rolled logger. The event/action
-lines are structured fields, and spans give the surrounding context for free.
+**Everything goes through `tracing`. Nothing prints.** No `println!`, no
+`eprintln!`, no hand-rolled logger, anywhere — a print is a line that skips the
+level, the fields, the file and the sha, and it is exactly the line missing from
+the log you are handed. The one exception is a command whose *output is the
+point*: `eww-state dump` writes its answer to stdout, because that is the
+program's result rather than a record of it. Everything else is an event with
+structured fields, and spans give the surrounding context for free.
 
 **The file rotates in place.** Logs go somewhere appropriate for the platform —
 `$XDG_STATE_HOME/eww-state/` — capped at a maximum size and rotated, so the
@@ -266,22 +321,19 @@ matching needs no trait at all — which is how events and actions stay free of
 every type they touch, and would also force every test to spell out fields it
 has no opinion about.
 
-**Time is not part of the syntax.** The macro reads the clock off the machine
-(`state.now()`) and hands it to `handle_events`. A test that is *about* time —
-staleness, backoff, a debounce — moves the clock first and then evaluates:
+**Time needs no syntax of its own.** It is an event, so a test that is *about*
+time — staleness, backoff, a debounce — sends one:
 
 ```rust
-state.set_now(T0 + Duration::from_secs(FRESH_FOR_SECS));
-
 eval!(&mut state,
+    < EventClock::Tick { now: T0 + Duration::from_secs(FRESH_FOR) },
     < requested(false),
     > Action::ToProbe { action: ActionProbe::Sample { .. } },
 );
 ```
 
-`now()` is `pub` for exactly this, and `set_now` is `#[cfg(test)]` — in a
-running program time still arrives only as an argument, from the runtime that
-read it.
+That is the same event the runtime sends, so the test drives the machine exactly
+as the program does, with no test-only door into its state.
 
 **Everything else is a plain assertion after the macro.** `eval!` covers the
 actions; the state the machine is left in is checked the ordinary way:

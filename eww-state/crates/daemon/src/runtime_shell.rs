@@ -1,44 +1,22 @@
-//! Carrying out what the state machine asked for.
+//! Carrying out a shell action.
 //!
-//! Each action runs on its own thread and reports back as `Event::JobDone`, so
-//! a ten-second `bluetoothctl connect` or a screenshot the user never finishes
-//! selecting can't hold up anything else. Nothing here decides anything: the
-//! outcome goes back to the machine, which owns what it means.
+//! Each of these runs a program and reports whether it worked. Nothing here
+//! decides anything — where a command needs a second try or a prompt, that is
+//! how the command works, not a rule about the widget.
 
-use std::sync::mpsc::Sender;
-
-use eww_state_core::{Action, ActionKind, Event, Intent, JobId, Shot};
+use eww_state_core::ActionShell;
+use eww_state_core::Event;
+use eww_state_core::EventJob;
+use eww_state_core::Shot;
 
 use crate::paths::Paths;
-use crate::probe;
 use crate::proc;
-use crate::svg;
+use crate::runtime_daemon::RuntimeDaemon;
 
-pub struct Runner {
-    pub paths: Paths,
-    pub events: Sender<Event>,
-}
-
-impl Runner {
-    /// Run an action to completion. Called on a worker thread.
-    pub fn run(&self, action: Action) {
-        let Action { id, kind } = action;
-        let (ok, detail) = self.execute(id, kind);
-        let _ = self.events.send(Event::JobDone { id, ok, detail });
-    }
-
-    fn execute(&self, _id: JobId, kind: ActionKind) -> (bool, Option<String>) {
-        match kind {
-            ActionKind::Probe(p) => {
-                if let Some(obs) = probe::sample(p, &self.paths) {
-                    let _ = self.events.send(Event::Observed(obs));
-                    (true, None)
-                } else {
-                    (false, None)
-                }
-            }
-
-            ActionKind::SetVolume(v) => (
+impl RuntimeDaemon {
+    pub(crate) fn perform_action_shell(&self, action: ActionShell) -> (bool, Option<String>) {
+        match action {
+            ActionShell::SetVolume { percent } => (
                 proc::ok(
                     "wpctl",
                     &[
@@ -46,68 +24,58 @@ impl Runner {
                         "-l",
                         "1",
                         "@DEFAULT_AUDIO_SINK@",
-                        &format!("{v}%"),
+                        &format!("{percent}%"),
                     ],
                 ),
                 None,
             ),
-            ActionKind::SetBrightness(v) => {
-                (proc::ok("brightnessctl", &["set", &format!("{v}%")]), None)
-            }
+            ActionShell::SetBrightness { percent } => (
+                proc::ok("brightnessctl", &["set", &format!("{percent}%")]),
+                None,
+            ),
 
-            ActionKind::WifiSetEnabled(on) => (
+            ActionShell::WifiSetEnabled { on } => (
                 proc::ok("nmcli", &["radio", "wifi", if on { "on" } else { "off" }]),
                 None,
             ),
-            ActionKind::WifiScan => (proc::ok("nmcli", &["device", "wifi", "rescan"]), None),
-            ActionKind::WifiConnect { ssid } => self.wifi_connect(&ssid),
+            ActionShell::WifiScan => (proc::ok("nmcli", &["device", "wifi", "rescan"]), None),
+            ActionShell::WifiConnect { ssid } => self.wifi_connect(&ssid),
 
-            ActionKind::BtSetPowered(on) => (
+            ActionShell::BtSetPowered { on } => (
                 proc::ok("bluetoothctl", &["power", if on { "on" } else { "off" }]),
                 None,
             ),
             // Timed discovery, so devices that only advertise while scanning
             // still show up. Fire and forget: nothing waits on the result.
-            ActionKind::BtScan => {
+            ActionShell::BtScan => {
                 proc::detach("bluetoothctl --timeout 10 scan on >/dev/null 2>&1");
                 (true, None)
             }
-            ActionKind::BtConnect { mac, .. } => {
+            ActionShell::BtConnect { mac, .. } => {
                 // Trust first so it reconnects by itself next time. No explicit
                 // `pair`: BlueZ completes any missing pairing during connect,
                 // and `pair` fails outright on a device not in pairing mode.
                 proc::ok("bluetoothctl", &["trust", &mac]);
                 (proc::ok("bluetoothctl", &["connect", &mac]), None)
             }
-            ActionKind::BtDisconnect { mac, .. } => {
+            ActionShell::BtDisconnect { mac, .. } => {
                 (proc::ok("bluetoothctl", &["disconnect", &mac]), None)
             }
 
-            ActionKind::Launch { cmd } => {
+            ActionShell::Launch { cmd } => {
                 proc::detach(&format!("cd ~ && {cmd}"));
                 (true, None)
             }
-            ActionKind::PersistDock(apps) => (probe::write_dock(&self.paths, &apps).is_ok(), None),
 
-            ActionKind::RenderBattery { percent, charging } => (
-                svg::render_battery(&self.paths.cache, percent, charging).is_ok(),
-                None,
-            ),
-
-            ActionKind::ShotCapture => self.capture(),
-            ActionKind::ShotCopy { path } => (
+            ActionShell::Capture => self.capture(),
+            ActionShell::CopyShot { path } => (
                 proc::pipe_file("wl-copy", &["--type", "image/png"], &path).unwrap_or(false),
                 None,
             ),
-            ActionKind::ShotSave { path } => {
-                let name = proc::out("date", &["+Screenshot %Y-%m-%d %H.%M.%S.png"])
-                    .unwrap_or_else(|| "Screenshot.png".into());
-                let dest = self.paths.screenshots.join(name);
-                (std::fs::copy(&path, &dest).is_ok(), None)
-            }
-            ActionKind::ShotDelete { path } => (std::fs::remove_file(&path).is_ok(), None),
 
-            ActionKind::Notify { title, body } => (proc::ok("notify-send", &[&title, &body]), None),
+            ActionShell::Notify { title, body } => {
+                (proc::ok("notify-send", &[&title, &body]), None)
+            }
         }
     }
 
@@ -125,10 +93,10 @@ impl Runner {
         }
         let theme = format!(
             "{}/rofi/themes/menu.rasi",
-            self.paths
+            self.paths()
                 .eww_config
                 .parent()
-                .map(crate::paths::Paths::str)
+                .map(Paths::str)
                 .unwrap_or_default()
         );
         let pass = proc::out(
@@ -136,7 +104,8 @@ impl Runner {
             &["-dmenu", "-password", "-theme", &theme, "-p", ssid],
         );
         match pass {
-            // A dismissed prompt is a deliberate no-op, not a failure.
+            // A dismissed prompt is a deliberate no-op, not a failure. The
+            // machine has a rule keyed on this exact word.
             None => (false, Some("cancelled".into())),
             Some(p) if p.is_empty() => (false, Some("cancelled".into())),
             Some(p) => (
@@ -156,13 +125,13 @@ impl Runner {
     /// which the compositor has not yet torn down slurp's overlay, baking the
     /// blue selection into the shot. Grabbing first makes that impossible.
     fn capture(&self) -> (bool, Option<String>) {
-        let dir = &self.paths.shots;
+        let dir = &self.paths().shots;
         let _ = std::fs::create_dir_all(dir);
         reap_shots(dir);
 
         let stamp = proc::out("date", &["+%s%N"]).unwrap_or_default();
         let full = dir.join(format!("full-{stamp}.png"));
-        let full_s = crate::paths::Paths::str(&full);
+        let full_s = Paths::str(&full);
         if !proc::ok("grim", &[&full_s]) {
             return (false, None);
         }
@@ -185,19 +154,19 @@ impl Runner {
             let _ = std::fs::remove_file(&full);
             return (false, Some("cancelled".into()));
         };
-        let Some((x, y, w, h)) = parse_geometry(&geom) else {
+        let Some((x, y, width, height)) = parse_geometry(&geom) else {
             let _ = std::fs::remove_file(&full);
             return (false, None);
         };
 
         let shot = dir.join(format!("shot-{stamp}.png"));
-        let shot_s = crate::paths::Paths::str(&shot);
+        let shot_s = Paths::str(&shot);
         let cropped = proc::ok(
             "magick",
             &[
                 &full_s,
                 "-crop",
-                &format!("{w}x{h}+{x}+{y}"),
+                &format!("{width}x{height}+{x}+{y}"),
                 "+repage",
                 &shot_s,
             ],
@@ -207,11 +176,13 @@ impl Runner {
             return (false, None);
         }
 
-        let _ = self.events.send(Event::Intent(Intent::ShotStage(Shot {
-            path: shot_s,
-            width: w,
-            height: h,
-        })));
+        self.send(Event::FromJob(EventJob::ShotStaged {
+            shot: Shot {
+                path: shot_s,
+                width,
+                height,
+            },
+        }));
         (true, None)
     }
 }

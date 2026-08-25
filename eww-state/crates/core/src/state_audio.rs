@@ -1,15 +1,17 @@
 //! Volume: the bar icon and the slider popup.
 
-use crate::action::ActionKind;
+use crate::action_shell::ActionShell;
 use crate::config::Config;
-use crate::ctx::{Ctx, Vars};
-use crate::event::Probe;
-use crate::model::Audio as Level;
-use crate::widgets::{PollPlan, Widget};
+use crate::ctx::Ctx;
+use crate::model::Audio;
+use crate::probe::Probe;
+use crate::state::PollPlan;
+use crate::state::State;
+use crate::wire_vars::WireVars;
 
 #[derive(Clone, Debug, Default)]
-pub struct Audio {
-    level: Level,
+pub struct StateAudio {
+    level: Audio,
     /// Number of `set-volume` calls dispatched but not yet finished.
     ///
     /// While any is outstanding the probe's answer describes the volume from
@@ -18,16 +20,20 @@ pub struct Audio {
     inflight: u32,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum Ev {
+#[derive(Debug)]
+pub enum EventAudio {
     /// The user moved the slider.
-    Set(u8),
-    Observed(Level),
-    Done,
+    Set {
+        percent: u8,
+    },
+    Observed {
+        audio: Audio,
+    },
+    Finished,
 }
 
-impl Audio {
-    pub fn level(&self) -> Level {
+impl StateAudio {
+    pub fn level(&self) -> Audio {
         self.level
     }
 
@@ -44,34 +50,34 @@ impl Audio {
     }
 }
 
-impl Widget for Audio {
-    type Ev = Ev;
+impl State for StateAudio {
+    type Event = EventAudio;
 
-    fn update(&mut self, ev: Ev, cx: &mut Ctx) {
-        match ev {
-            Ev::Set(v) => {
-                let v = v.min(100);
+    fn handle_event(&mut self, _cfg: &Config, event: EventAudio, cx: &mut Ctx) {
+        match event {
+            EventAudio::Set { percent } => {
+                let percent = percent.min(100);
                 // Optimistic: the slider shows the requested value immediately
                 // and the probe confirms it later.
-                self.level.volume = v;
+                self.level.volume = percent;
                 self.inflight += 1;
-                cx.dispatch(ActionKind::SetVolume(v));
+                cx.shell(ActionShell::SetVolume { percent });
             }
-            Ev::Observed(level) => {
+            EventAudio::Observed { audio } => {
                 if self.inflight == 0 {
-                    self.level = level;
+                    self.level = audio;
                 }
             }
-            Ev::Done => {
+            EventAudio::Finished => {
                 self.inflight = self.inflight.saturating_sub(1);
                 if self.inflight == 0 {
-                    cx.dispatch(ActionKind::Probe(Probe::Audio));
+                    cx.probe(Probe::Audio);
                 }
             }
         }
     }
 
-    fn vars(&self, cfg: &Config, out: &mut Vars) {
+    fn vars(&self, cfg: &Config, out: &mut WireVars) {
         out.set("vol_pct", self.level.volume);
         out.set("vol_muted", self.level.muted);
         out.set("vol_icon", self.icon(cfg));
@@ -87,54 +93,54 @@ mod tests {
     use super::*;
     use crate::test_util::run;
 
+    fn level(volume: u8, muted: bool) -> Audio {
+        Audio { volume, muted }
+    }
+
     #[test]
     fn drag_wins_over_a_stale_poll() {
-        let mut a = Audio::default();
-        run(&mut a, Ev::Set(70));
+        let mut a = StateAudio::default();
+        run(&mut a, EventAudio::Set { percent: 70 });
         // The probe was already in flight with the old value when we set 70.
         run(
             &mut a,
-            Ev::Observed(Level {
-                volume: 20,
-                muted: false,
-            }),
+            EventAudio::Observed {
+                audio: level(20, false),
+            },
         );
         assert_eq!(a.level.volume, 70, "a stale sample must not undo the drag");
-        run(&mut a, Ev::Done);
+        run(&mut a, EventAudio::Finished);
         run(
             &mut a,
-            Ev::Observed(Level {
-                volume: 70,
-                muted: false,
-            }),
+            EventAudio::Observed {
+                audio: level(70, false),
+            },
         );
         assert_eq!(a.level.volume, 70);
     }
 
     #[test]
     fn settles_on_the_last_of_a_burst() {
-        let mut a = Audio::default();
-        for v in [10, 20, 30] {
-            run(&mut a, Ev::Set(v));
+        let mut a = StateAudio::default();
+        for percent in [10, 20, 30] {
+            run(&mut a, EventAudio::Set { percent });
         }
-        run(&mut a, Ev::Done);
-        run(&mut a, Ev::Done);
+        run(&mut a, EventAudio::Finished);
+        run(&mut a, EventAudio::Finished);
         // Two of three done: still ignoring samples.
         run(
             &mut a,
-            Ev::Observed(Level {
-                volume: 10,
-                muted: false,
-            }),
+            EventAudio::Observed {
+                audio: level(10, false),
+            },
         );
         assert_eq!(a.level.volume, 30);
-        run(&mut a, Ev::Done);
+        run(&mut a, EventAudio::Finished);
         run(
             &mut a,
-            Ev::Observed(Level {
-                volume: 30,
-                muted: true,
-            }),
+            EventAudio::Observed {
+                audio: level(30, true),
+            },
         );
         assert!(a.level.muted);
     }
@@ -142,10 +148,10 @@ mod tests {
     #[test]
     fn icon_tracks_level() {
         let cfg = Config::new("/i", "/c");
-        let mut a = Audio::default();
-        run(&mut a, Ev::Set(0));
+        let mut a = StateAudio::default();
+        run(&mut a, EventAudio::Set { percent: 0 });
         assert!(a.icon(&cfg).ends_with("audio-volume-low-symbolic.svg"));
-        run(&mut a, Ev::Set(80));
+        run(&mut a, EventAudio::Set { percent: 80 });
         assert!(a.icon(&cfg).ends_with("audio-volume-high-symbolic.svg"));
     }
 }

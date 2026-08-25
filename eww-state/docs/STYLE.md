@@ -70,6 +70,65 @@ state, write `debug_assert_eq!` instead.
 The shape and the rules are in [STATE_MACHINES.md](STATE_MACHINES.md). The two
 that get broken most often: fields are private, and nothing derived is stored.
 
+## Logging
+
+**No `println!` or `eprintln!` anywhere.** Everything goes through `tracing`, so
+every line gets a level, structured fields and the commit it came from. The
+exception is a command whose output *is* the answer — `dump` writes to stdout.
+How turns are recorded is in [STATE_MACHINES.md](STATE_MACHINES.md).
+
+## Wire types
+
+**Anything that turns state into bytes for something else is a `wire_*` file.**
+`WireVars`, `WireJson`, and whatever serde types arrive later. Serialization is
+not domain logic — nothing decides anything in it — but it is not IO either:
+nothing there opens a socket or touches a file. It lives with the domain code,
+prefixed so a directory listing never confuses the two.
+
+### Testing them
+
+Serialization and deserialization are the one place where a literal expected
+value beats a pattern, because the literal *is* the contract. Two macros, and
+nothing else:
+
+**Serializing.** Two arguments: the value, and the one-line JSON it must
+produce. No snapshot — the expected text is short enough to read in the diff,
+and writing it out is the assertion.
+
+```rust
+serializes!(
+    WifiRow { ssid: "cafe".into(), signal: 70, secure: true },
+    r#"{"ssid":"cafe","signal":70,"secure":true}"#
+);
+```
+
+**Deserializing.** Two arguments: the one-line JSON message, and a multi-line
+inline snapshot of the value it must produce. This one expands to an inline
+`insta` debug snapshot, so the expected value is generated rather than typed and
+stays readable however deeply the type nests.
+
+```rust
+deserializes!(
+    r#"{"ssid":"cafe","signal":70,"secure":true}"#,
+    @r###"
+    WifiRow {
+        ssid: "cafe",
+        signal: 70,
+        secure: true,
+    }
+    "###
+);
+```
+
+That is the only snapshot testing in the tree, and it is deliberate: the ban in
+[STATE_MACHINES.md](STATE_MACHINES.md) is on asserting *behaviour* through a
+`Debug` string nobody chose. Here the shape of the value **is** what the test is
+about, and a hand-written expectation for a nested type is worse — long, wrong
+often, and revised by hand every time a field moves.
+
+Nothing in the tree deserializes JSON yet, so `insta` is not a dependency yet
+either. The first type that needs it brings both.
+
 ## JSON
 
 **Formatted with 4-space indentation.** A one-line file is unreadable in a diff

@@ -1,38 +1,40 @@
 //! Screen brightness: the bar icon and the slider popup.
 
-use crate::action::ActionKind;
+use crate::action_shell::ActionShell;
 use crate::config::Config;
-use crate::ctx::{Ctx, Vars};
-use crate::event::Probe;
-use crate::widgets::{PollPlan, Widget};
+use crate::ctx::Ctx;
+use crate::probe::Probe;
+use crate::state::PollPlan;
+use crate::state::State;
+use crate::wire_vars::WireVars;
 
 /// Never go below this: a 0% backlight is a black screen with no way back.
 const MIN: u8 = 1;
 
 #[derive(Clone, Debug)]
-pub struct Backlight {
+pub struct StateBacklight {
     percent: u8,
-    /// See the note in [`crate::widgets::audio`] — same stale-sample guard.
+    /// See the note in [`crate::state_audio`] — same stale-sample guard.
     inflight: u32,
 }
 
-impl Default for Backlight {
+impl Default for StateBacklight {
     fn default() -> Self {
-        Backlight {
+        StateBacklight {
             percent: MIN,
             inflight: 0,
         }
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum Ev {
-    Set(u8),
-    Observed(u8),
-    Done,
+#[derive(Debug)]
+pub enum EventBacklight {
+    Set { percent: u8 },
+    Observed { percent: u8 },
+    Finished,
 }
 
-impl Backlight {
+impl StateBacklight {
     pub fn percent(&self) -> u8 {
         self.percent
     }
@@ -50,32 +52,32 @@ impl Backlight {
     }
 }
 
-impl Widget for Backlight {
-    type Ev = Ev;
+impl State for StateBacklight {
+    type Event = EventBacklight;
 
-    fn update(&mut self, ev: Ev, cx: &mut Ctx) {
-        match ev {
-            Ev::Set(v) => {
-                let v = v.clamp(MIN, 100);
-                self.percent = v;
+    fn handle_event(&mut self, _cfg: &Config, event: EventBacklight, cx: &mut Ctx) {
+        match event {
+            EventBacklight::Set { percent } => {
+                let percent = percent.clamp(MIN, 100);
+                self.percent = percent;
                 self.inflight += 1;
-                cx.dispatch(ActionKind::SetBrightness(v));
+                cx.shell(ActionShell::SetBrightness { percent });
             }
-            Ev::Observed(v) => {
+            EventBacklight::Observed { percent } => {
                 if self.inflight == 0 {
-                    self.percent = v.clamp(MIN, 100);
+                    self.percent = percent.clamp(MIN, 100);
                 }
             }
-            Ev::Done => {
+            EventBacklight::Finished => {
                 self.inflight = self.inflight.saturating_sub(1);
                 if self.inflight == 0 {
-                    cx.dispatch(ActionKind::Probe(Probe::Backlight));
+                    cx.probe(Probe::Backlight);
                 }
             }
         }
     }
 
-    fn vars(&self, cfg: &Config, out: &mut Vars) {
+    fn vars(&self, cfg: &Config, out: &mut WireVars) {
         out.set("bri_pct", self.percent);
         out.set("bri_icon", self.icon(cfg));
     }
@@ -92,18 +94,18 @@ mod tests {
 
     #[test]
     fn never_reaches_zero() {
-        let mut b = Backlight::default();
-        run(&mut b, Ev::Set(0));
+        let mut b = StateBacklight::default();
+        run(&mut b, EventBacklight::Set { percent: 0 });
         assert_eq!(b.percent, MIN);
-        run(&mut b, Ev::Observed(0));
+        run(&mut b, EventBacklight::Observed { percent: 0 });
         assert_eq!(b.percent, MIN, "even a probe cannot report us to black");
     }
 
     #[test]
     fn stale_sample_does_not_undo_a_drag() {
-        let mut b = Backlight::default();
-        run(&mut b, Ev::Set(90));
-        run(&mut b, Ev::Observed(10));
+        let mut b = StateBacklight::default();
+        run(&mut b, EventBacklight::Set { percent: 90 });
+        run(&mut b, EventBacklight::Observed { percent: 10 });
         assert_eq!(b.percent, 90);
     }
 }

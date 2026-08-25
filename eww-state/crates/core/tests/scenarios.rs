@@ -5,10 +5,21 @@
 
 mod common;
 
+use std::time::Duration;
+
 use common::World;
-use eww_state_core::{
-    Audio, BtDevice, BtSnapshot, Intent, MenuId, NetSnapshot, Obs, ShotAction, WifiNetwork,
-};
+use eww_state_core::Audio;
+use eww_state_core::BtDevice;
+use eww_state_core::BtSnapshot;
+use eww_state_core::Event;
+use eww_state_core::EventEww;
+use eww_state_core::EventProbe;
+use eww_state_core::EventUi;
+use eww_state_core::MenuId;
+use eww_state_core::NetSnapshot;
+use eww_state_core::Probe;
+use eww_state_core::ShotAction;
+use eww_state_core::WifiNetwork;
 
 fn networks(ssids: &[(&str, u8, bool)]) -> NetSnapshot {
     NetSnapshot {
@@ -62,7 +73,7 @@ fn no_sequence_of_clicks_opens_two_menus() {
         MenuId::Brightness,
     ];
     for (i, menu) in clicks.into_iter().enumerate() {
-        w.intent(Intent::MenuToggle(menu));
+        w.menu(menu);
         let open = w.menus_open();
         assert!(open.len() <= 1, "click {i} left {open:?} on screen");
 
@@ -81,14 +92,14 @@ fn no_sequence_of_clicks_opens_two_menus() {
 #[test]
 fn switching_menus_swaps_the_panel_and_keeps_the_backdrop() {
     let mut w = World::new();
-    w.intent(Intent::MenuToggle(MenuId::Wifi));
+    w.menu(MenuId::Wifi);
     assert_eq!(w.menus_open(), ["wifi-menu"]);
-    w.intent(Intent::MenuToggle(MenuId::Bt));
+    w.menu(MenuId::Bt);
     assert_eq!(w.menus_open(), ["bt-menu"]);
     assert!(w.windows().contains(&"menu-backdrop".to_string()));
 
     // Clicking outside dismisses whatever is up.
-    w.intent(Intent::MenuClose);
+    w.ui(EventUi::MenuDismissed);
     assert!(w.menus_open().is_empty());
     assert!(!w.windows().contains(&"menu-backdrop".to_string()));
 }
@@ -98,17 +109,19 @@ fn switching_menus_swaps_the_panel_and_keeps_the_backdrop() {
 #[test]
 fn dragging_the_volume_slider_beats_the_poll() {
     let mut w = World::new();
-    w.intent(Intent::MenuToggle(MenuId::Volume));
+    w.menu(MenuId::Volume);
 
     w.hold = true; // the setter has not returned yet
-    for v in [55, 60, 65, 70] {
-        w.intent(Intent::VolumeSet(v));
+    for percent in [55, 60, 65, 70] {
+        w.ui(EventUi::VolumeSet { percent });
     }
     // A poll from before the drag lands in the middle of it.
-    w.stale_sample(Obs::Audio(Audio {
-        volume: 50,
-        muted: false,
-    }));
+    w.stale_sample(EventProbe::Audio {
+        audio: Audio {
+            volume: 50,
+            muted: false,
+        },
+    });
     assert_eq!(w.var("vol_pct"), "70", "the slider follows the finger");
 
     w.release();
@@ -125,11 +138,11 @@ fn dragging_the_volume_slider_beats_the_poll() {
 fn joining_a_network_end_to_end() {
     let mut w = World::new();
     w.net = networks(&[("home", 80, false), ("cafe", 40, false)]);
-    w.intent(Intent::Refresh(eww_state_core::Probe::Net));
-    w.intent(Intent::MenuToggle(MenuId::Wifi));
+    w.feed(&[Event::FromProbe(EventProbe::Due { what: Probe::Net })]);
+    w.menu(MenuId::Wifi);
 
     w.hold = true;
-    w.intent(Intent::WifiConnect {
+    w.ui(EventUi::WifiPicked {
         ssid: "home".into(),
     });
     assert_eq!(w.var("wifi_connecting"), "home");
@@ -155,9 +168,9 @@ fn a_failed_join_says_so_and_leaves_the_radio_alone() {
     let mut w = World::new();
     w.net = networks(&[("cafe", 40, false)]);
     w.wifi_fails = true;
-    w.intent(Intent::Refresh(eww_state_core::Probe::Net));
-    w.intent(Intent::MenuToggle(MenuId::Wifi));
-    w.intent(Intent::WifiConnect {
+    w.feed(&[Event::FromProbe(EventProbe::Due { what: Probe::Net })]);
+    w.menu(MenuId::Wifi);
+    w.ui(EventUi::WifiPicked {
         ssid: "cafe".into(),
     });
 
@@ -172,16 +185,18 @@ fn a_failed_join_says_so_and_leaves_the_radio_alone() {
 fn the_radio_switch_does_not_flicker() {
     let mut w = World::new();
     w.net = networks(&[("home", 80, true)]);
-    w.intent(Intent::Refresh(eww_state_core::Probe::Net));
+    w.feed(&[Event::FromProbe(EventProbe::Due { what: Probe::Net })]);
     assert!(w.var("wifi").contains("\"enabled\":true"));
 
     w.hold = true;
-    w.intent(Intent::WifiToggle);
+    w.ui(EventUi::WifiToggled);
     assert!(
         w.var("wifi").contains("\"enabled\":false"),
         "switch flips at once"
     );
-    w.stale_sample(Obs::Net(networks(&[("home", 80, true)])));
+    w.stale_sample(EventProbe::Net {
+        net: networks(&[("home", 80, true)]),
+    });
     assert!(
         w.var("wifi").contains("\"enabled\":false"),
         "a sample from before the switch must not flip it back"
@@ -198,11 +213,11 @@ fn the_radio_switch_does_not_flicker() {
 fn connecting_a_device_keeps_the_menu_open() {
     let mut w = World::new();
     w.bt = devices(&[("AA:BB", "Buds", false)]);
-    w.intent(Intent::Refresh(eww_state_core::Probe::Bt));
-    w.intent(Intent::MenuToggle(MenuId::Bt));
+    w.feed(&[Event::FromProbe(EventProbe::Due { what: Probe::Bt })]);
+    w.menu(MenuId::Bt);
 
     w.hold = true;
-    w.intent(Intent::BtConnect {
+    w.ui(EventUi::BtPicked {
         mac: "AA:BB".into(),
     });
     assert_eq!(w.var("bt_connecting"), "AA:BB");
@@ -214,7 +229,7 @@ fn connecting_a_device_keeps_the_menu_open() {
     assert!(w.var("bt_icon").ends_with("bluetooth-paired-symbolic.svg"));
 
     // Clicking the connected device again disconnects it.
-    w.intent(Intent::BtConnect {
+    w.ui(EventUi::BtPicked {
         mac: "AA:BB".into(),
     });
     assert_eq!(w.notifications().last(), Some(&"Disconnected Buds"));
@@ -225,9 +240,9 @@ fn connecting_a_device_keeps_the_menu_open() {
 #[test]
 fn the_screenshot_preview_and_the_bar_menus_ignore_each_other() {
     let mut w = World::new();
-    w.intent(Intent::MenuToggle(MenuId::Wifi));
+    w.menu(MenuId::Wifi);
 
-    w.intent(Intent::ShotCapture);
+    w.ui(EventUi::ShotRequested);
     w.capture_finished("/shots/a.png", 1600, 900);
     assert_eq!(w.menus_open(), ["wifi-menu"], "the bar menu is untouched");
     assert!(w.windows().contains(&"shot-menu".to_string()));
@@ -235,12 +250,14 @@ fn the_screenshot_preview_and_the_bar_menus_ignore_each_other() {
     assert_eq!(w.var("shot_h"), "180");
 
     // Clicking outside the preview dismisses only the preview.
-    w.intent(Intent::ShotAct(ShotAction::Dismiss));
+    w.ui(EventUi::ShotActed {
+        action: ShotAction::Dismiss,
+    });
     assert!(!w.windows().contains(&"shot-menu".to_string()));
     assert_eq!(w.menus_open(), ["wifi-menu"]);
 
     // And dismissing the bar menu leaves no screenshot windows behind.
-    w.intent(Intent::MenuClose);
+    w.ui(EventUi::MenuDismissed);
     assert!(w.windows().iter().all(|n| n == "bar" || n == "dock"));
 }
 
@@ -248,17 +265,42 @@ fn the_screenshot_preview_and_the_bar_menus_ignore_each_other() {
 #[test]
 fn a_second_print_during_selection_is_ignored() {
     let mut w = World::new();
-    w.intent(Intent::ShotCapture);
-    w.intent(Intent::ShotCapture);
-    w.intent(Intent::ShotCapture);
+    w.ui(EventUi::ShotRequested);
+    w.ui(EventUi::ShotRequested);
+    w.ui(EventUi::ShotRequested);
     assert_eq!(w.counts().get("shot-capture"), Some(&1));
 
     w.capture_finished("/shots/a.png", 800, 600);
-    w.intent(Intent::ShotAct(ShotAction::Save));
+    w.ui(EventUi::ShotActed {
+        action: ShotAction::Save,
+    });
     assert!(w.log.contains(&"shot-save /shots/a.png".to_string()));
 
     // With the first one finished, Print works again.
-    w.intent(Intent::ShotCapture);
+    w.ui(EventUi::ShotRequested);
+    assert_eq!(w.counts().get("shot-capture"), Some(&2));
+}
+
+/// A region selection nobody finishes used to wedge Print for the rest of the
+/// session: only one capture may be in flight, and nothing ever cleared it.
+#[test]
+fn an_abandoned_selection_stops_blocking_the_key() {
+    let mut w = World::new();
+    w.ui(EventUi::ShotRequested);
+    w.ui(EventUi::ShotRequested);
+    assert_eq!(w.counts().get("shot-capture"), Some(&1));
+
+    let timeout = w.bar.config().capture_timeout;
+    w.wait(timeout - Duration::from_secs(1));
+    w.ui(EventUi::ShotRequested);
+    assert_eq!(
+        w.counts().get("shot-capture"),
+        Some(&1),
+        "still waiting on the user, not stuck"
+    );
+
+    w.wait(Duration::from_secs(1));
+    w.ui(EventUi::ShotRequested);
     assert_eq!(w.counts().get("shot-capture"), Some(&2));
 }
 
@@ -271,11 +313,15 @@ fn bar_and_dock_never_get_stranded_by_fullscreen() {
 
     for _ in 0..3 {
         w.fullscreen = true;
-        w.intent(Intent::Refresh(eww_state_core::Probe::Fullscreen));
+        w.feed(&[Event::FromProbe(EventProbe::Due {
+            what: Probe::Fullscreen,
+        })]);
         assert!(w.windows().is_empty(), "both hide together");
 
         w.fullscreen = false;
-        w.intent(Intent::Refresh(eww_state_core::Probe::Fullscreen));
+        w.feed(&[Event::FromProbe(EventProbe::Due {
+            what: Probe::Fullscreen,
+        })]);
         assert_eq!(w.windows(), ["bar", "dock"], "and both come back");
     }
 }
@@ -285,30 +331,30 @@ fn bar_and_dock_never_get_stranded_by_fullscreen() {
 #[test]
 fn polling_follows_what_is_on_screen() {
     let mut w = World::new();
-    let idle = w.bar.polls()[&eww_state_core::Probe::Net];
+    let idle = w.bar.polls()[&Probe::Net];
 
-    w.intent(Intent::MenuToggle(MenuId::Wifi));
-    let open = w.bar.polls()[&eww_state_core::Probe::Net];
+    w.menu(MenuId::Wifi);
+    let open = w.bar.polls()[&Probe::Net];
     assert!(open < idle, "an open menu polls faster");
     assert!(
         w.log.contains(&"wifi-scan".to_string()),
         "and rescans on open"
     );
 
-    w.intent(Intent::MenuClose);
-    assert_eq!(w.bar.polls()[&eww_state_core::Probe::Net], idle);
+    w.ui(EventUi::MenuDismissed);
+    assert_eq!(w.bar.polls()[&Probe::Net], idle);
 }
 
 /// eww restarting must not lose anything: the machine holds the truth and the
-/// shell republishes it.
+/// runtime republishes it.
 #[test]
 fn state_survives_an_eww_restart() {
     let mut w = World::new();
     w.net = networks(&[("home", 80, true)]);
-    w.intent(Intent::Refresh(eww_state_core::Probe::Net));
-    w.intent(Intent::MenuToggle(MenuId::Wifi));
+    w.feed(&[Event::FromProbe(EventProbe::Due { what: Probe::Net })]);
+    w.menu(MenuId::Wifi);
     let before = (w.var("wifi"), w.windows());
 
-    w.feed(eww_state_core::Event::EwwReset);
+    w.feed(&[Event::FromEww(EventEww::Restarted)]);
     assert_eq!((w.var("wifi"), w.windows()), before);
 }

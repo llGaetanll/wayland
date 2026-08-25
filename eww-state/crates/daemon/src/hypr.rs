@@ -1,19 +1,37 @@
-//! Listening to the compositor.
+//! Talking to the compositor.
 //!
 //! Hyprland streams events on a socket; we only care whether the focused
 //! workspace has a fullscreen window, so the bar and dock can get out of the
 //! way. Reacting to the event beats polling for it: the bar hides in the same
 //! frame the window goes fullscreen.
 
-use std::io::{BufRead, BufReader};
+use std::io::BufRead;
+use std::io::BufReader;
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 
-use eww_state_core::{Event, Intent, Probe};
+use eww_state_core::Event;
+use eww_state_core::EventProbe;
+use eww_state_core::Probe;
 
-use crate::runtime::Msg;
+use crate::proc;
+use crate::runtime_daemon::Msg;
+
+pub fn sample() -> Option<EventProbe> {
+    let out = proc::out("hyprctl", &["activeworkspace"])?;
+    Some(EventProbe::Fullscreen {
+        on: parse_fullscreen(&out),
+    })
+}
+
+fn parse_fullscreen(out: &str) -> bool {
+    out.lines()
+        .find_map(|l| l.trim().strip_prefix("hasfullscreen:"))
+        .map(|v| v.trim() != "0")
+        .unwrap_or(false)
+}
 
 /// Events after which the answer to "is anything fullscreen here?" may differ.
 fn is_interesting(line: &str) -> bool {
@@ -47,21 +65,24 @@ fn socket_path() -> Option<PathBuf> {
 /// whenever something happened that could change the answer. Reconnects on its
 /// own, so a compositor restart doesn't need one here.
 pub fn watch(events: Sender<Msg>) {
-    std::thread::Builder::new()
+    let spawned = std::thread::Builder::new()
         .name("hypr".into())
         .spawn(move || loop {
             let Some(path) = socket_path() else {
-                return; // not running under Hyprland; nothing to watch
+                tracing::info!("not running under Hyprland; fullscreen is not watched");
+                return;
             };
             match UnixStream::connect(&path) {
                 Ok(stream) => {
                     let reader = BufReader::new(stream);
                     for line in reader.lines().map_while(Result::ok) {
-                        if is_interesting(&line)
-                            && events
-                                .send(Msg::Ev(Event::Intent(Intent::Refresh(Probe::Fullscreen))))
-                                .is_err()
-                        {
+                        if !is_interesting(&line) {
+                            continue;
+                        }
+                        let due = Event::FromProbe(EventProbe::Due {
+                            what: Probe::Fullscreen,
+                        });
+                        if events.send(Msg::Ev(due)).is_err() {
                             return;
                         }
                     }
@@ -69,13 +90,16 @@ pub fn watch(events: Sender<Msg>) {
                 Err(_) => std::thread::sleep(Duration::from_secs(2)),
             }
             std::thread::sleep(Duration::from_millis(500));
-        })
-        .expect("spawn hypr watcher");
+        });
+    if let Err(e) = spawned {
+        tracing::error!(error = %e, "could not watch the compositor");
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::is_interesting;
+    use super::parse_fullscreen;
 
     #[test]
     fn only_layout_changing_events_trigger_a_recheck() {
@@ -84,5 +108,14 @@ mod tests {
         assert!(is_interesting("closewindow>>abc123"));
         assert!(!is_interesting("activelayout>>keyboard,us"));
         assert!(!is_interesting("windowtitle>>abc123"));
+    }
+
+    #[test]
+    fn fullscreen_flag() {
+        assert!(parse_fullscreen(
+            "workspace ID 2 (2) on monitor eDP-1:\n\tmonitorID: 0\n\thasfullscreen: 1"
+        ));
+        assert!(!parse_fullscreen("\thasfullscreen: 0"));
+        assert!(!parse_fullscreen(""));
     }
 }

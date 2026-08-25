@@ -1,0 +1,13 @@
+[package]
+name = "eww-state-eval"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "eval"
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "3", features = ["full", "parsing", "printing", "proc-macro"] }

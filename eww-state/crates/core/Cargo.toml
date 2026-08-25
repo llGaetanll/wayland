@@ -6,3 +6,6 @@ edition.workspace = true
 # No dependencies, by design: this crate is the pure state machine. It performs
 # no IO, spawns nothing, reads no clock. Everything it needs arrives as an Event.
 [dependencies]
+
+[dev-dependencies]
+eww-state-eval = { path = "../eval" }

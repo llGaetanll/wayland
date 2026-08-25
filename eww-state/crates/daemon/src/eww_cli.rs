@@ -15,6 +15,8 @@ impl EwwCli {
     }
 
     fn run(&self, args: &[&str]) -> bool {
+        // A non-UTF-8 config path is not something we can hand to a command
+        // line; the current directory is what eww would default to anyway.
         let mut all = vec!["-c", self.config_dir.to_str().unwrap_or(".")];
         all.extend_from_slice(args);
         proc::ok("eww", &all)

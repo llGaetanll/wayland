@@ -7,27 +7,27 @@
 use std::fmt::{self, Write};
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum Json {
+pub enum WireJson {
     Bool(bool),
     Int(i64),
     Str(String),
-    Arr(Vec<Json>),
-    Obj(Vec<(&'static str, Json)>),
+    Arr(Vec<WireJson>),
+    Obj(Vec<(&'static str, WireJson)>),
 }
 
-impl Json {
-    pub fn s(v: impl Into<String>) -> Json {
-        Json::Str(v.into())
+impl WireJson {
+    pub fn s(v: impl Into<String>) -> WireJson {
+        WireJson::Str(v.into())
     }
 }
 
-impl fmt::Display for Json {
+impl fmt::Display for WireJson {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Json::Bool(b) => f.write_str(if *b { "true" } else { "false" }),
-            Json::Int(i) => write!(f, "{i}"),
-            Json::Str(s) => write_str(f, s),
-            Json::Arr(items) => {
+            WireJson::Bool(b) => f.write_str(if *b { "true" } else { "false" }),
+            WireJson::Int(i) => write!(f, "{i}"),
+            WireJson::Str(s) => write_str(f, s),
+            WireJson::Arr(items) => {
                 f.write_char('[')?;
                 for (i, it) in items.iter().enumerate() {
                     if i > 0 {
@@ -37,7 +37,7 @@ impl fmt::Display for Json {
                 }
                 f.write_char(']')
             }
-            Json::Obj(fields) => {
+            WireJson::Obj(fields) => {
                 f.write_char('{')?;
                 for (i, (k, v)) in fields.iter().enumerate() {
                     if i > 0 {
@@ -75,19 +75,21 @@ mod tests {
 
     #[test]
     fn escapes_and_nests() {
-        let v = Json::Obj(vec![
-            ("ssid", Json::s("a\"b\\c")),
-            ("on", Json::Bool(true)),
-            ("list", Json::Arr(vec![Json::Int(1), Json::Int(-2)])),
-        ]);
-        assert_eq!(
-            v.to_string(),
+        serializes!(
+            WireJson::Obj(vec![
+                ("ssid", WireJson::s("a\"b\\c")),
+                ("on", WireJson::Bool(true)),
+                (
+                    "list",
+                    WireJson::Arr(vec![WireJson::Int(1), WireJson::Int(-2)]),
+                ),
+            ]),
             r#"{"ssid":"a\"b\\c","on":true,"list":[1,-2]}"#
         );
     }
 
     #[test]
     fn escapes_control_chars() {
-        assert_eq!(Json::s("a\u{1}b").to_string(), r#""a\u0001b""#);
+        serializes!(WireJson::s("a\u{1}b"), r#""a\u0001b""#);
     }
 }
