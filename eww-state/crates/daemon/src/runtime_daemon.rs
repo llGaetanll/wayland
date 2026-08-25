@@ -93,7 +93,6 @@ impl RuntimeDaemon {
 
             if !events.is_empty() {
                 turn += 1;
-                tracing::info!(turn, n = events.len(), "state -> events {events:?}");
 
                 if events
                     .iter()
@@ -106,7 +105,7 @@ impl RuntimeDaemon {
 
                 let mut actions = Vec::new();
                 state.handle_events(&events, &mut actions);
-                tracing::info!(turn, n = actions.len(), "state <- actions {actions:?}");
+                log_turn(turn, &events, &actions);
 
                 // Content first, then windows: a panel never appears showing
                 // what it looked like last time it was open.
@@ -163,6 +162,24 @@ impl RuntimeDaemon {
             tracing::debug!("the loop has gone; dropping an event");
         }
     }
+}
+
+/// Write the turn down: what went in, and what came back out.
+///
+/// A turn that is nothing but clock ticks and produced nothing is logged a
+/// level down. Two lines a second of "the time passed and nothing happened"
+/// would otherwise roll the whole file over every ninety minutes, and the
+/// history a bug report needs would be gone. `EWW_STATE_LOG=debug` brings them
+/// back.
+fn log_turn(turn: u64, events: &[Event], actions: &[Action]) {
+    let quiet = actions.is_empty() && events.iter().all(|e| matches!(e, Event::FromClock(_)));
+    if quiet {
+        tracing::debug!(turn, n = events.len(), events = ?events, "state -> events");
+        tracing::debug!(turn, n = 0, "state <- actions");
+        return;
+    }
+    tracing::info!(turn, n = events.len(), events = ?events, "state -> events");
+    tracing::info!(turn, n = actions.len(), actions = ?actions, "state <- actions");
 }
 
 /// Take everything already waiting, so one turn is one batch. Draining stops at

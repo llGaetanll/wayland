@@ -16,6 +16,7 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use tracing::Event;
+use tracing::Level;
 use tracing::Subscriber;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::FmtContext;
@@ -36,8 +37,20 @@ pub fn init_daemon(path: PathBuf) {
     let writer = LogFile::new(path);
     tracing_subscriber::fmt()
         .event_format(Format)
+        .with_max_level(max_level())
         .with_writer(writer)
         .init();
+}
+
+/// `EWW_STATE_LOG=debug` to see the quiet clock turns as well.
+fn max_level() -> Level {
+    match std::env::var("EWW_STATE_LOG").as_deref() {
+        Ok("trace") => Level::TRACE,
+        Ok("debug") => Level::DEBUG,
+        Ok("warn") => Level::WARN,
+        Ok("error") => Level::ERROR,
+        _ => Level::INFO,
+    }
 }
 
 /// The CLI logs to stderr, where the person who typed the command is looking.

@@ -106,9 +106,16 @@ pub(crate) mod test_util {
         run_full(machine, event).0
     }
 
+    thread_local! {
+        /// Job ids never repeat in a running program, so they must not repeat
+        /// across the calls a test makes either — two actions sharing one id
+        /// would let a stale completion match a fresh job.
+        static NEXT_JOB: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    }
+
     pub fn run_full<S: State>(machine: &mut S, event: S::Event) -> (Vec<Action>, Vec<Req>) {
         let cfg = Config::new("/icons", "/cache");
-        let mut next = 0u64;
+        let mut next = NEXT_JOB.with(|n| n.get());
         let mut actions = Vec::new();
         let mut owners = BTreeMap::new();
         let mut reqs = Vec::new();
@@ -123,6 +130,7 @@ pub(crate) mod test_util {
             );
             machine.handle_event(&cfg, event, &mut cx);
         }
+        NEXT_JOB.with(|n| n.set(next));
         (actions, reqs)
     }
 }

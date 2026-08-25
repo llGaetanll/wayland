@@ -4,7 +4,8 @@
 //! JSON text. This is the whole of what we need to produce it; nothing here
 //! parses, so there is no error type.
 
-use std::fmt::{self, Write};
+use std::fmt;
+use std::fmt::Write;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum WireJson {

@@ -5,7 +5,8 @@
 //! it, since they cache by path and new bytes at the same path would be missed.
 
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
 pub fn battery_path(cache: &Path, percent: u8, charging: bool) -> PathBuf {
     cache.join(format!("battery-{percent}-{}.svg", u8::from(charging)))

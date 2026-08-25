@@ -36,7 +36,8 @@ and you get the same state and the same actions — so a bug reported with no
 repro can still be found, fixed, and kept as a test. A bug seen once never comes
 back. If a decision can instead depend on a clock, a race, or which of two
 things happened to finish first, none of that holds and you are guessing. That
-recording is not hypothetical — see [Logging the turn](#logging-the-turn).
+recording is not hypothetical — see [Logging the turn](#logging-the-turn), and
+[REPLAY.md](REPLAY.md) for where that recording is meant to lead.
 
 ## The rules a machine follows
 

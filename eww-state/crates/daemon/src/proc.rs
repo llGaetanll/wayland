@@ -1,7 +1,8 @@
 //! Running other programs, which is most of what this crate does.
 
 use std::io;
-use std::process::{Command, Stdio};
+use std::process::Command;
+use std::process::Stdio;
 
 /// Run a command and return its stdout, trimmed. `None` if it could not be run
 /// or exited non-zero — every caller treats those the same way.

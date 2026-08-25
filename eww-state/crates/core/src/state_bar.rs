@@ -419,9 +419,8 @@ impl StateBar {
                             .handle_event(&b.cfg, EventBluetooth::Finished { id, ok }, cx)
                     }),
                     StateId::Battery => self.with(StateId::Battery, actions, reqs, |b, cx| {
-                        if ok {
-                            b.battery.handle_event(&b.cfg, EventBattery::Rendered, cx)
-                        }
+                        b.battery
+                            .handle_event(&b.cfg, EventBattery::Finished { id, ok }, cx)
                     }),
                     StateId::Shot => self.with(StateId::Shot, actions, reqs, |b, cx| {
                         b.shot.handle_event(&b.cfg, EventShot::Finished { id }, cx)
