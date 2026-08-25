@@ -76,10 +76,10 @@ impl RuntimeDaemon {
         let mut reconciler = Reconciler::new();
         reconciler.reset(&mut eww);
 
-        let mut state = StateBar::new(
-            Config::new(Paths::str(&paths.icons), Paths::str(&paths.cache)),
-            std::time::Instant::now(),
-        );
+        let mut state = StateBar::new(Config::new(
+            Paths::str(&paths.icons),
+            Paths::str(&paths.cache),
+        ));
 
         tracing::info!(commit = crate::log::COMMIT, "daemon started");
         // Populate everything before the first interval elapses.
@@ -103,8 +103,12 @@ impl RuntimeDaemon {
                     reconciler.forget();
                 }
 
+                // Every event lands before the machine is asked for anything:
+                // a batch is one situation, and what it adds up to is only
+                // knowable once all of it has been seen.
+                state.handle_events(&events);
                 let mut actions = Vec::new();
-                state.handle_events(&events, &mut actions);
+                state.emit_actions(&mut actions);
                 log_turn(turn, &events, &actions);
 
                 // Content first, then windows: a panel never appears showing

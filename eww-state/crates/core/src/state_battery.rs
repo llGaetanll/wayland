@@ -5,19 +5,23 @@
 //! exactly when the picture does — which is what makes eww and GTK reload it,
 //! since new bytes at a cached path would not.
 
+use crate::action::Action;
 use crate::action_file::ActionFile;
 use crate::config::Config;
-use crate::ctx::Ctx;
+use crate::jobs::Jobs;
 use crate::model::Battery;
 use crate::probe::JobId;
 use crate::probe::Probe;
+use crate::req::Req;
 use crate::state::PollPlan;
 use crate::state::State;
 use crate::wire_vars::WireVars;
 
 #[derive(Clone, Debug, Default)]
 pub struct StateBattery {
-    level: Battery,
+    /// `None` until the first sample. There is no such thing as a battery
+    /// reading we have not taken, and a default one is a fabricated 0%.
+    level: Option<Battery>,
     /// The pill the runtime has confirmed is on disk.
     ///
     /// Nothing else may be published as the icon path. GTK caches a load that
@@ -27,6 +31,12 @@ pub struct StateBattery {
     drawn: Option<Battery>,
     /// The render we are waiting on, and what it is drawing.
     drawing: Option<(JobId, Battery)>,
+    /// The picture whose render just failed.
+    ///
+    /// Without this the retry is immediate, and a failure that reports back
+    /// instantly spins: emit, fail, emit. A changed reading clears it, which is
+    /// the next sample away at worst.
+    failed: Option<Battery>,
 }
 
 #[derive(Debug)]
@@ -36,7 +46,7 @@ pub enum EventBattery {
 }
 
 impl StateBattery {
-    pub fn level(&self) -> Battery {
+    pub fn level(&self) -> Option<Battery> {
         self.level
     }
 
@@ -56,22 +66,13 @@ impl StateBattery {
 impl State for StateBattery {
     type Event = EventBattery;
 
-    fn handle_event(&mut self, _cfg: &Config, event: EventBattery, cx: &mut Ctx) {
+    fn handle_event(&mut self, _cfg: &Config, event: EventBattery) {
         match event {
             EventBattery::Observed { battery } => {
-                self.level = Battery {
+                self.level = Some(Battery {
                     percent: battery.percent.min(100),
                     ..battery
-                };
-                let pending = self.drawing.map(|(_, b)| b);
-                if self.drawn == Some(self.level) || pending == Some(self.level) {
-                    return;
-                }
-                let id = cx.file(ActionFile::RenderBattery {
-                    percent: self.level.percent,
-                    charging: self.level.charging,
                 });
-                self.drawing = Some((id, self.level));
             }
             EventBattery::Finished { id, ok } => {
                 let Some((pending, battery)) = self.drawing else {
@@ -81,19 +82,47 @@ impl State for StateBattery {
                     return;
                 }
                 self.drawing = None;
-                // A failed render leaves `drawn` alone, so the next sample tries
-                // again rather than pointing the bar at a file nobody wrote.
+                // A failed render leaves `drawn` alone, so the bar is never
+                // pointed at a file nobody wrote.
                 if ok {
                     self.drawn = Some(battery);
+                    self.failed = None;
+                } else {
+                    self.failed = Some(battery);
                 }
             }
         }
     }
 
+    fn emit_actions(
+        &mut self,
+        _cfg: &Config,
+        jobs: &mut Jobs,
+        actions: &mut Vec<Action>,
+    ) -> Option<Req> {
+        let Some(level) = self.level else {
+            return None; // nothing sampled yet, so nothing to draw
+        };
+        let drawing = self.drawing.map(|(_, battery)| battery);
+        if self.drawn != Some(level) && drawing != Some(level) && self.failed != Some(level) {
+            let id = jobs.take();
+            actions.push(Action::file(
+                id,
+                ActionFile::RenderBattery {
+                    percent: level.percent,
+                    charging: level.charging,
+                },
+            ));
+            self.drawing = Some((id, level));
+        }
+        None
+    }
+
     fn vars(&self, cfg: &Config, out: &mut WireVars) {
+        let level = self.level.unwrap_or_default();
         out.set("batt_icon", self.icon(cfg));
-        out.set("batt_pct", self.level.percent);
-        out.set("batt_charging", self.level.charging);
+        out.set("batt_pct", level.percent);
+        out.set("batt_charging", level.charging);
     }
 
     fn polls(&self, cfg: &Config, out: &mut PollPlan) {
@@ -167,22 +196,25 @@ mod tests {
     }
 
     #[test]
-    fn a_failed_render_is_tried_again() {
+    fn a_failed_render_does_not_spin() {
         let mut b = StateBattery::default();
         let actions = run(&mut b, observed(30, false));
-        run(
+        let failed = run(
             &mut b,
             EventBattery::Finished {
                 id: actions[0].id(),
                 ok: false,
             },
         );
-        assert_eq!(icon(&b), "");
-        assert_eq!(
-            run(&mut b, observed(30, false)).len(),
-            1,
-            "an unconfirmed render is attempted again"
+        assert!(
+            failed.is_empty(),
+            "retrying the moment it failed is a hot loop, not a retry"
         );
+        assert_eq!(icon(&b), "");
+        assert!(run(&mut b, observed(30, false)).is_empty());
+
+        // A different picture is a different file, so it is worth trying.
+        assert_eq!(run(&mut b, observed(31, false)).len(), 1);
     }
 
     #[test]

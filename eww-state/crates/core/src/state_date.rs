@@ -5,7 +5,6 @@
 //! already-formatted string arrives as an observation like any other.
 
 use crate::config::Config;
-use crate::ctx::Ctx;
 use crate::probe::Probe;
 use crate::state::PollPlan;
 use crate::state::State;
@@ -24,7 +23,7 @@ pub enum EventDate {
 impl State for StateDate {
     type Event = EventDate;
 
-    fn handle_event(&mut self, _cfg: &Config, event: EventDate, _cx: &mut Ctx) {
+    fn handle_event(&mut self, _cfg: &Config, event: EventDate) {
         let EventDate::Observed { text } = event;
         self.text = text;
     }

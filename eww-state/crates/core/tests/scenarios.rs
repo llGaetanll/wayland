@@ -5,8 +5,6 @@
 
 mod common;
 
-use std::time::Duration;
-
 use common::World;
 use eww_state_core::Audio;
 use eww_state_core::BtDevice;
@@ -16,6 +14,7 @@ use eww_state_core::EventEww;
 use eww_state_core::EventProbe;
 use eww_state_core::EventUi;
 use eww_state_core::MenuId;
+use eww_state_core::Millis;
 use eww_state_core::NetSnapshot;
 use eww_state_core::Probe;
 use eww_state_core::ShotAction;
@@ -291,7 +290,7 @@ fn an_abandoned_selection_stops_blocking_the_key() {
     assert_eq!(w.counts().get("shot-capture"), Some(&1));
 
     let timeout = w.bar.config().capture_timeout;
-    w.wait(timeout - Duration::from_secs(1));
+    w.wait(timeout.since(Millis::secs(1)));
     w.ui(EventUi::ShotRequested);
     assert_eq!(
         w.counts().get("shot-capture"),
@@ -299,7 +298,7 @@ fn an_abandoned_selection_stops_blocking_the_key() {
         "still waiting on the user, not stuck"
     );
 
-    w.wait(Duration::from_secs(1));
+    w.wait(Millis::secs(1));
     w.ui(EventUi::ShotRequested);
     assert_eq!(w.counts().get("shot-capture"), Some(&2));
 }

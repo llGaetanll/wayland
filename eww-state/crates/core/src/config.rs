@@ -4,7 +4,7 @@
 //! where icons live, how often to poll, how long to wait — arrives here as
 //! plain data, so the machine itself stays free of IO.
 
-use std::time::Duration;
+use crate::millis::Millis;
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -16,10 +16,10 @@ pub struct Config {
     /// How long a dispatched job may stay in flight before the machine stops
     /// believing in it. Without this a result that never comes back — a killed
     /// daemon, a hung `bluetoothctl` — leaves a switch stuck mid-flip forever.
-    pub job_timeout: Duration,
+    pub job_timeout: Millis,
     /// The same, for a region selection: the user is holding the mouse, so this
     /// is patience rather than a stuck job.
-    pub capture_timeout: Duration,
+    pub capture_timeout: Millis,
     /// Rows taller than this collapse the menu scroll area; matches the CSS.
     pub row_height: u32,
     pub max_list_height: u32,
@@ -69,8 +69,8 @@ impl Config {
             icons_dir: icons_dir.into(),
             cache_dir: cache_dir.into(),
             poll: PollConfig::default(),
-            job_timeout: Duration::from_secs(30),
-            capture_timeout: Duration::from_secs(180),
+            job_timeout: Millis::secs(30),
+            capture_timeout: Millis::secs(180),
             row_height: 40,
             max_list_height: 300,
             shot_max_width: 320,

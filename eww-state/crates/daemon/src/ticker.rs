@@ -20,6 +20,7 @@ use std::time::Instant;
 use eww_state_core::Event;
 use eww_state_core::EventClock;
 use eww_state_core::EventProbe;
+use eww_state_core::Millis;
 use eww_state_core::Probe;
 
 use crate::runtime_daemon::Msg;
@@ -127,12 +128,17 @@ impl Scheduler {
                 }
             });
         }
+        // Milliseconds since the daemon started, not since the epoch: the
+        // machine only ever subtracts two of these, and a small number reads
+        // better in a log and encodes smaller in a trace.
+        let epoch = Instant::now();
         spawn("clock", move || loop {
             std::thread::sleep(CLOCK_INTERVAL);
-            let tick = Event::FromClock(EventClock::Tick {
-                now: Instant::now(),
-            });
-            if events.send(Msg::Ev(tick)).is_err() {
+            let now = Millis(epoch.elapsed().as_millis() as u64);
+            if events
+                .send(Msg::Ev(Event::FromClock(EventClock::Tick { now })))
+                .is_err()
+            {
                 return;
             }
         });

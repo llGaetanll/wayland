@@ -21,6 +21,31 @@ pub enum Action {
 }
 
 impl Action {
+    pub fn probe(id: JobId, what: crate::probe::Probe) -> Action {
+        Action::ToProbe {
+            id,
+            action: ActionProbe::Sample { what },
+        }
+    }
+
+    pub fn shell(id: JobId, action: ActionShell) -> Action {
+        Action::ToShell { id, action }
+    }
+
+    pub fn file(id: JobId, action: ActionFile) -> Action {
+        Action::ToFile { id, action }
+    }
+
+    pub fn notify(id: JobId, title: &str, body: impl Into<String>) -> Action {
+        Action::shell(
+            id,
+            ActionShell::Notify {
+                title: title.to_string(),
+                body: body.into(),
+            },
+        )
+    }
+
     pub fn id(&self) -> JobId {
         match self {
             Action::ToProbe { id, .. } | Action::ToShell { id, .. } | Action::ToFile { id, .. } => {

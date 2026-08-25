@@ -14,10 +14,10 @@
 //! ```
 //!
 //! `<` is an event going in, `>` is an action expected out. Adjacent `<` lines
-//! are one batch: they reach `handle_events` together, and the `>` lines after
-//! them are exactly what that call must produce — in order, nothing extra,
-//! nothing missing. A `<` after a `>` starts the next batch, and a trailing
-//! batch with no `>` asserts silence.
+//! are one batch: they all reach `handle_events` before `emit_actions` is
+//! called once, and the `>` lines after them are exactly what that call must
+//! produce — in order, nothing extra, nothing missing. A `<` after a `>` starts
+//! the next batch, and a trailing batch with no `>` asserts silence.
 //!
 //! The `>` lines are patterns, not values, so they expand to `matches!` and
 //! need no `PartialEq` on any type they touch.
@@ -120,7 +120,10 @@ pub fn eval(input: TokenStream) -> TokenStream {
             {
                 let __events = [#(#events),*];
                 let mut __actions = ::std::vec::Vec::new();
-                __state.handle_events(&__events, &mut __actions);
+                // The whole batch lands before anything is asked of the
+                // machine, which is the point of writing tests this way.
+                __state.handle_events(&__events);
+                __state.emit_actions(&mut __actions);
                 // Count first: a missing or extra action reports as that,
                 // rather than as a mismatch three lines further down.
                 assert_eq!(

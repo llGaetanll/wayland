@@ -4,9 +4,9 @@
 //! the machine reads a clock; it answers *may I do this yet* from the last tick
 //! it was handed, which is what makes a recorded session replay identically.
 
-use std::time::Instant;
+use crate::millis::Millis;
 
 #[derive(Debug)]
 pub enum EventClock {
-    Tick { now: Instant },
+    Tick { now: Millis },
 }

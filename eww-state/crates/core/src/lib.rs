@@ -32,15 +32,17 @@ pub mod action_file;
 pub mod action_probe;
 pub mod action_shell;
 pub mod config;
-pub mod ctx;
 pub mod event;
 pub mod event_clock;
 pub mod event_eww;
 pub mod event_job;
 pub mod event_probe;
 pub mod event_ui;
+pub mod jobs;
+pub mod millis;
 pub mod model;
 pub mod probe;
+pub mod req;
 pub mod state;
 pub mod state_audio;
 pub mod state_backlight;
@@ -49,6 +51,7 @@ pub mod state_battery;
 pub mod state_bluetooth;
 pub mod state_date;
 pub mod state_dock;
+pub mod state_id;
 pub mod state_shot;
 pub mod state_theme;
 pub mod state_wifi;
@@ -62,14 +65,14 @@ pub use action_file::ActionFile;
 pub use action_probe::ActionProbe;
 pub use action_shell::ActionShell;
 pub use config::Config;
-pub use ctx::Req;
-pub use ctx::StateId;
 pub use event::Event;
 pub use event_clock::EventClock;
 pub use event_eww::EventEww;
 pub use event_job::EventJob;
 pub use event_probe::EventProbe;
 pub use event_ui::EventUi;
+pub use jobs::Jobs;
+pub use millis::Millis;
 pub use model::Audio;
 pub use model::Battery;
 pub use model::BtDevice;
@@ -83,54 +86,41 @@ pub use model::Theme;
 pub use model::WifiNetwork;
 pub use probe::JobId;
 pub use probe::Probe;
+pub use req::Req;
 pub use state::PollPlan;
 pub use state::State;
 pub use state_bar::StateBar;
+pub use state_id::StateId;
 pub use window::Window;
 pub use wire_vars::WireVars;
 
 #[cfg(test)]
 pub(crate) mod test_util {
-    use std::collections::BTreeMap;
-    use std::time::Instant;
-
     use crate::action::Action;
     use crate::config::Config;
-    use crate::ctx::Ctx;
-    use crate::ctx::Req;
-    use crate::ctx::StateId;
+    use crate::jobs::Jobs;
+    use crate::req::Req;
     use crate::state::State;
 
-    /// Drive one sub-machine in isolation and collect what it asked for.
+    /// Drive one sub-machine in isolation: apply the event, then ask what it
+    /// wants — the same two steps the bar takes.
     pub fn run<S: State>(machine: &mut S, event: S::Event) -> Vec<Action> {
         run_full(machine, event).0
     }
 
-    thread_local! {
-        /// Job ids never repeat in a running program, so they must not repeat
-        /// across the calls a test makes either — two actions sharing one id
-        /// would let a stale completion match a fresh job.
-        static NEXT_JOB: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    pub fn run_full<S: State>(machine: &mut S, event: S::Event) -> (Vec<Action>, Option<Req>) {
+        let cfg = Config::new("/icons", "/cache");
+        let mut actions = Vec::new();
+        machine.handle_event(&cfg, event);
+        // Job ids never repeat in a running program, so they must not repeat
+        // across the calls a test makes either — two actions sharing one id
+        // would let a stale completion match a fresh job.
+        let req =
+            JOBS.with(|jobs| machine.emit_actions(&cfg, &mut jobs.borrow_mut(), &mut actions));
+        (actions, req)
     }
 
-    pub fn run_full<S: State>(machine: &mut S, event: S::Event) -> (Vec<Action>, Vec<Req>) {
-        let cfg = Config::new("/icons", "/cache");
-        let mut next = NEXT_JOB.with(|n| n.get());
-        let mut actions = Vec::new();
-        let mut owners = BTreeMap::new();
-        let mut reqs = Vec::new();
-        {
-            let mut cx = Ctx::new(
-                StateId::Bar,
-                Instant::now(),
-                &mut next,
-                &mut actions,
-                &mut owners,
-                &mut reqs,
-            );
-            machine.handle_event(&cfg, event, &mut cx);
-        }
-        NEXT_JOB.with(|n| n.set(next));
-        (actions, reqs)
+    thread_local! {
+        static JOBS: std::cell::RefCell<Jobs> = std::cell::RefCell::new(Jobs::default());
     }
 }

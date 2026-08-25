@@ -9,8 +9,6 @@
 #![allow(dead_code)] // a harness offers more than any one test uses
 
 use std::collections::BTreeMap;
-use std::time::Duration;
-use std::time::Instant;
 
 use eww_state_core::Action;
 use eww_state_core::ActionFile;
@@ -28,6 +26,7 @@ use eww_state_core::EventProbe;
 use eww_state_core::EventUi;
 use eww_state_core::JobId;
 use eww_state_core::MenuId;
+use eww_state_core::Millis;
 use eww_state_core::NetSnapshot;
 use eww_state_core::Probe;
 use eww_state_core::Shot;
@@ -36,7 +35,7 @@ use eww_state_core::Theme;
 
 pub struct World {
     pub bar: StateBar,
-    now: Instant,
+    now: Millis,
 
     // What the machine can observe about the world.
     pub volume: u8,
@@ -61,10 +60,9 @@ pub struct World {
 
 impl World {
     pub fn new() -> World {
-        let now = Instant::now();
         World {
-            bar: StateBar::new(Config::new("/icons", "/cache"), now),
-            now,
+            bar: StateBar::new(Config::new("/icons", "/cache")),
+            now: Millis::default(),
             volume: 50,
             muted: false,
             brightness: 40,
@@ -85,7 +83,8 @@ impl World {
     /// whole job, minus the waiting.
     pub fn feed(&mut self, events: &[Event]) -> &mut World {
         let mut queue = Vec::new();
-        self.bar.handle_events(events, &mut queue);
+        self.bar.handle_events(events);
+        self.bar.emit_actions(&mut queue);
         self.drain(queue);
         self
     }
@@ -99,8 +98,8 @@ impl World {
     }
 
     /// Move the clock and tell the machine, the way the daemon's tick does.
-    pub fn wait(&mut self, d: Duration) -> &mut World {
-        self.now += d;
+    pub fn wait(&mut self, d: Millis) -> &mut World {
+        self.now = self.now + d;
         let now = self.now;
         self.feed(&[Event::FromClock(EventClock::Tick { now })])
     }
@@ -148,8 +147,8 @@ impl World {
                 let observed = self.sample(what);
                 let mut out = Vec::new();
                 self.bar
-                    .handle_events(&[Event::FromProbe(observed)], &mut out);
-                self.bar.handle_events(&[finished(id, true)], &mut out);
+                    .handle_events(&[Event::FromProbe(observed), finished(id, true)]);
+                self.bar.emit_actions(&mut out);
                 return out;
             }
             // A capture is answered by the test calling `capture_finished`,
@@ -165,7 +164,8 @@ impl World {
             Action::ToFile { action, .. } => self.file(action),
         };
         let mut out = Vec::new();
-        self.bar.handle_events(&[job(id, ok, detail)], &mut out);
+        self.bar.handle_events(&[job(id, ok, detail)]);
+        self.bar.emit_actions(&mut out);
         out
     }
 

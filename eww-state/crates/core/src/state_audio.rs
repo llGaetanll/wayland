@@ -1,10 +1,12 @@
 //! Volume: the bar icon and the slider popup.
 
+use crate::action::Action;
 use crate::action_shell::ActionShell;
 use crate::config::Config;
-use crate::ctx::Ctx;
+use crate::jobs::Jobs;
 use crate::model::Audio;
 use crate::probe::Probe;
+use crate::req::Req;
 use crate::state::PollPlan;
 use crate::state::State;
 use crate::wire_vars::WireVars;
@@ -12,12 +14,18 @@ use crate::wire_vars::WireVars;
 #[derive(Clone, Debug, Default)]
 pub struct StateAudio {
     level: Audio,
+    /// Where the user has dragged the slider to, not yet asked for. A whole
+    /// burst of drag events in one batch collapses to the value it ended on.
+    wanted: Option<u8>,
     /// Number of `set-volume` calls dispatched but not yet finished.
     ///
     /// While any is outstanding the probe's answer describes the volume from
     /// *before* the drag, so it is ignored. This is what stopped the slider
     /// snapping backwards mid-drag: the poll and the setter no longer race.
     inflight: u32,
+    /// The setters have all reported back, so it is worth asking what the
+    /// volume actually ended up as.
+    confirm: bool,
 }
 
 #[derive(Debug)]
@@ -53,28 +61,46 @@ impl StateAudio {
 impl State for StateAudio {
     type Event = EventAudio;
 
-    fn handle_event(&mut self, _cfg: &Config, event: EventAudio, cx: &mut Ctx) {
+    fn handle_event(&mut self, _cfg: &Config, event: EventAudio) {
         match event {
             EventAudio::Set { percent } => {
                 let percent = percent.min(100);
                 // Optimistic: the slider shows the requested value immediately
                 // and the probe confirms it later.
                 self.level.volume = percent;
-                self.inflight += 1;
-                cx.shell(ActionShell::SetVolume { percent });
+                self.wanted = Some(percent);
             }
             EventAudio::Observed { audio } => {
-                if self.inflight == 0 {
+                if self.inflight == 0 && self.wanted.is_none() {
                     self.level = audio;
                 }
             }
             EventAudio::Finished => {
                 self.inflight = self.inflight.saturating_sub(1);
-                if self.inflight == 0 {
-                    cx.probe(Probe::Audio);
-                }
+                self.confirm = self.inflight == 0;
             }
         }
+    }
+
+    fn emit_actions(
+        &mut self,
+        _cfg: &Config,
+        jobs: &mut Jobs,
+        actions: &mut Vec<Action>,
+    ) -> Option<Req> {
+        if let Some(percent) = self.wanted.take() {
+            self.inflight += 1;
+            self.confirm = false;
+            actions.push(Action::shell(
+                jobs.take(),
+                ActionShell::SetVolume { percent },
+            ));
+        }
+        if self.confirm && self.inflight == 0 {
+            self.confirm = false;
+            actions.push(Action::probe(jobs.take(), Probe::Audio));
+        }
+        None
     }
 
     fn vars(&self, cfg: &Config, out: &mut WireVars) {

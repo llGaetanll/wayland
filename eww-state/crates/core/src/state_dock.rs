@@ -4,12 +4,14 @@
 //! with it — and the file on disk is written from this state, never read back
 //! into it except at startup.
 
+use crate::action::Action;
 use crate::action_file::ActionFile;
 use crate::action_shell::ActionShell;
 use crate::config::Config;
-use crate::ctx::Ctx;
+use crate::jobs::Jobs;
 use crate::model::DockApp;
 use crate::probe::Probe;
+use crate::req::Req;
 use crate::state::PollPlan;
 use crate::state::State;
 use crate::wire_json::WireJson;
@@ -18,6 +20,13 @@ use crate::wire_vars::WireVars;
 #[derive(Clone, Debug, Default)]
 pub struct StateDock {
     apps: Vec<DockApp>,
+    /// Apps clicked this batch, in click order and deduplicated: a double click
+    /// is one launch, two different icons are two.
+    launching: Vec<String>,
+    /// The order changed and the file on disk has not caught up. A flag rather
+    /// than a copy of the list, so two drags in one batch write once, with the
+    /// order they ended on.
+    unsaved: bool,
 }
 
 #[derive(Debug)]
@@ -48,14 +57,19 @@ impl StateDock {
 impl State for StateDock {
     type Event = EventDock;
 
-    fn handle_event(&mut self, _cfg: &Config, event: EventDock, cx: &mut Ctx) {
+    fn handle_event(&mut self, _cfg: &Config, event: EventDock) {
         match event {
-            EventDock::Observed { apps } => self.apps = apps,
+            // A resync from disk cannot overwrite an order we have not written
+            // back yet; the file is behind us, not ahead.
+            EventDock::Observed { apps } => {
+                if !self.unsaved {
+                    self.apps = apps;
+                }
+            }
             EventDock::Launch { id } => {
-                if let Some(app) = self.apps.iter().find(|a| a.id == id) {
-                    cx.shell(ActionShell::Launch {
-                        cmd: app.cmd.clone(),
-                    });
+                let known = self.apps.iter().any(|a| a.id == id);
+                if known && !self.launching.contains(&id) {
+                    self.launching.push(id);
                 }
             }
             EventDock::Swap { moved, onto } => {
@@ -66,11 +80,38 @@ impl State for StateDock {
                     return;
                 };
                 self.apps.swap(a, b);
-                cx.file(ActionFile::WriteDock {
-                    apps: self.apps.clone(),
-                });
+                self.unsaved = true;
             }
         }
+    }
+
+    fn emit_actions(
+        &mut self,
+        _cfg: &Config,
+        jobs: &mut Jobs,
+        actions: &mut Vec<Action>,
+    ) -> Option<Req> {
+        for id in std::mem::take(&mut self.launching) {
+            let Some(app) = self.apps.iter().find(|a| a.id == id) else {
+                continue; // the list moved under the click
+            };
+            actions.push(Action::shell(
+                jobs.take(),
+                ActionShell::Launch {
+                    cmd: app.cmd.clone(),
+                },
+            ));
+        }
+        if self.unsaved {
+            self.unsaved = false;
+            actions.push(Action::file(
+                jobs.take(),
+                ActionFile::WriteDock {
+                    apps: self.apps.clone(),
+                },
+            ));
+        }
+        None
     }
 
     fn vars(&self, _cfg: &Config, out: &mut WireVars) {

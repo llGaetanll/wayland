@@ -22,9 +22,12 @@ and neither is entangled with the other.
 1. Something happens — a click, a probe returns, a timer fires. That is an
    **event**: a plain enum value, nothing more.
 2. The event goes into the machine, which holds all the state and updates it
-   synchronously. It reads no clock, opens no socket, awaits nothing.
-3. What it hands back are **actions**: the IO. A thin runtime carries them out,
-   and whatever comes back enters as the next event.
+   synchronously. It reads no clock, opens no socket, awaits nothing. It emits
+   nothing either — see [Handle everything, then decide
+   once](#handle-everything-then-decide-once).
+3. Once every event in the batch has landed, the machine is asked what should
+   happen now. What it hands back are **actions**: the IO. A thin runtime
+   carries them out, and whatever comes back enters as the next event.
 
 So the loop is `event -> machine -> action -> IO -> event`, and the only part
 with a decision in it is the one part that cannot touch the outside world.
@@ -82,6 +85,19 @@ These are settled. A new machine follows all of them.
    IO's business.** "May I send this yet?", "should this window be open?", "how
    often should this be sampled?" are all arithmetic over state, so they live in
    the machine rather than being guessed at by the runtime.
+
+9. **Events and actions are built from primitives and our own types, nothing
+   else.** A `u8`, a `String`, a `Duration` — or a type declared in this crate,
+   itself following the same rule all the way down. No type from a dependency
+   ever appears in a payload: not a `serde_json::Value`, not a library's error
+   enum, not a handle from whatever crate happened to produce the data. Two
+   reasons, and the second is the one that bites later. A foreign type in the
+   alphabet is a dependency reaching through the machine's front door, so its
+   version bump becomes a change to the vocabulary the whole program shares.
+   And the alphabet has to be *ours to encode*: a trace on disk and a derive
+   macro that writes one (see [REPLAY.md](REPLAY.md)) can only be written for
+   types we control. Map foreign data onto our own types at the edge, where the
+   parsing already happens.
 
 ## Waiting without sleeping
 
@@ -152,23 +168,24 @@ recorded log read as a story rather than a flat list.
 
 ## The shape of the machine
 
-The machine owns its state and mutates it in place. Actions are not returned;
-they are pushed into a buffer the caller owns, so a batch of events costs one
-allocation and a replay can reuse the same one:
+The machine owns its state and mutates it in place. Applying events and asking
+for actions are two separate calls:
 
 ```rust
 impl State {
-    pub fn handle_events(&mut self, events: &[Event], actions: &mut Vec<Action>) {
+    pub fn handle_events(&mut self, events: &[Event]) {
         for event in events {
-            self.handle_event(event, actions);
+            self.handle_event(event);
         }
     }
 
-    fn handle_event(&mut self, event: &Event, actions: &mut Vec<Action>) {
+    pub fn emit_actions(&mut self, actions: &mut Vec<Action>) { … }
+
+    fn handle_event(&mut self, event: &Event) {
         match event {
-            Event::FromUi(e) => self.handle_event_ui(e, actions),
-            Event::FromClock(e) => self.handle_event_clock(e, actions),
-            Event::FromProbe(e) => self.handle_event_probe(e, actions),
+            Event::FromUi(e) => self.handle_event_ui(e),
+            Event::FromClock(e) => self.handle_event_clock(e),
+            Event::FromProbe(e) => self.handle_event_probe(e),
         }
     }
 
@@ -177,9 +194,53 @@ impl State {
 }
 ```
 
-`handle_events` is the only public entry point; everything under it is one
-function per event group, mirroring the enums. `handle_event` does nothing but
-dispatch, so the arms stay small and each group's rules sit in one place.
+`handle_events` and `emit_actions` are the only public entry points; everything
+under the first is one function per event group, mirroring the enums.
+`handle_event` does nothing but dispatch, so the arms stay small and each
+group's rules sit in one place. Actions are still not returned: they are pushed
+into a buffer the caller owns, so a turn costs one allocation and a replay can
+reuse the same one.
+
+### Handle everything, then decide once
+
+**Handling an event never emits an action.** It only moves state. A turn is
+every event applied, and *then* one `emit_actions` over the state they left
+behind.
+
+The reason is that a batch is not a list of independent things — it is one
+situation, and the answer to it is only knowable once all of it has been seen.
+Two menu clicks that arrive together are not "open Wi-Fi, then close Wi-Fi and
+open Bluetooth". They are "Bluetooth is open now", and the only correct output
+is the one action that makes that true. A machine emitting as it goes cannot
+know that: it has already spoken by the time it reads the second click. Every
+half-open panel, every doubled command, every window closed a frame after it was
+opened, comes from answering an event before the batch is over.
+
+So the shape holds no matter how the events arrive:
+
+```rust
+state.handle_events(&events);
+state.emit_actions(&mut actions);
+```
+
+**It is `&mut self`, and that is not an oversight.** The derived getters —
+`vars()`, `windows()`, `polls()` — are `&self` and idempotent: ask twice, no
+harm. Actions are not. Asking twice to join a network joins it twice. So the
+machine has to remember what it has already asked for and emit only the
+difference, which is a write. In practice it already holds exactly that: the
+field that says a radio toggle is in flight, or a capture is running, is what
+stops the same action going out on the next turn. Those fields were always the
+answer to *may I send this yet?* — this is just where the question gets asked.
+
+**Sub-machines have the same two calls**, which is what makes them compose. The
+parent routes each event down as it applies it, then asks each child for its
+actions afterwards. Nothing about a child changes when it stops being a child.
+
+**Do not use it as an outbox.** Pushing actions onto a field while handling an
+event and draining it here looks the same from outside and gets none of the
+benefit: the decisions were still made one event at a time. What `emit_actions`
+reads is *state*, and what it emits is the gap between what the state says
+should be true and what has already been asked for.
 
 ## The runtime on the other side
 
@@ -197,8 +258,8 @@ impl Runtime {
 }
 ```
 
-One turn is: collect events, hand them to the machine, carry out the actions,
-log both. Whatever the IO produces re-enters as the next event, which closes the
+One turn is: collect events, hand them all to the machine, ask it for the
+actions they add up to, carry those out, log both. Whatever the IO produces re-enters as the next event, which closes the
 loop. Only `run` is public — everything else is reachable solely by carrying out
 an action, so nothing can do IO without an action asking for it.
 

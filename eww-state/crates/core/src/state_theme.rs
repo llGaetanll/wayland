@@ -1,7 +1,6 @@
 //! Light/dark preference, published as a CSS class every surface picks up.
 
 use crate::config::Config;
-use crate::ctx::Ctx;
 use crate::model::Theme;
 use crate::probe::Probe;
 use crate::state::PollPlan;
@@ -27,7 +26,7 @@ impl StateTheme {
 impl State for StateTheme {
     type Event = EventTheme;
 
-    fn handle_event(&mut self, _cfg: &Config, event: EventTheme, _cx: &mut Ctx) {
+    fn handle_event(&mut self, _cfg: &Config, event: EventTheme) {
         let EventTheme::Observed { theme } = event;
         self.mode = theme;
     }

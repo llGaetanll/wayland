@@ -4,14 +4,15 @@
 //! a device leaves the menu open, because pairing takes long enough that
 //! watching the row update is the point.
 
-use std::time::Instant;
-
+use crate::action::Action;
 use crate::action_shell::ActionShell;
 use crate::config::Config;
-use crate::ctx::Ctx;
+use crate::jobs::Jobs;
+use crate::millis::Millis;
 use crate::model::BtSnapshot;
 use crate::probe::JobId;
 use crate::probe::Probe;
+use crate::req::Req;
 use crate::state::PollPlan;
 use crate::state::State;
 use crate::util::b64;
@@ -25,6 +26,14 @@ pub struct StateBluetooth {
     busy: Option<Busy>,
     toggling: Option<Inflight>,
     menu_open: bool,
+    now: Millis,
+
+    /// What the batch asked for and has not been sent yet.
+    want_power: Option<bool>,
+    want_device: Option<String>,
+    want_scan: bool,
+    want_sample: bool,
+    say: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -33,14 +42,14 @@ struct Busy {
     mac: String,
     name: String,
     disconnecting: bool,
-    since: Instant,
+    since: Millis,
 }
 
 /// A job we are waiting on, and the tick we started waiting at.
 #[derive(Clone, Copy, Debug)]
 struct Inflight {
     id: JobId,
-    since: Instant,
+    since: Millis,
 }
 
 #[derive(Debug)]
@@ -56,7 +65,9 @@ pub enum EventBluetooth {
     MenuOpened,
     MenuClosed,
     /// The clock moved; give up on anything that has waited too long.
-    Tick,
+    Tick {
+        now: Millis,
+    },
     Finished {
         id: JobId,
         ok: bool,
@@ -81,19 +92,19 @@ impl StateBluetooth {
     /// Give up on a job that never reported back. `bluetoothctl connect` on a
     /// device that has wandered out of range simply never returns, and without
     /// this the row would say "Connecting…" until the daemon restarts.
-    fn expire(&mut self, cfg: &Config, cx: &mut Ctx) {
-        let now = cx.now();
+    fn expire(&mut self, cfg: &Config) {
+        let now = self.now;
         if self
             .toggling
-            .is_some_and(|t| now.saturating_duration_since(t.since) >= cfg.job_timeout)
+            .is_some_and(|t| now.since(t.since) >= cfg.job_timeout)
         {
             self.toggling = None;
-            cx.probe(Probe::Bt);
+            self.want_sample = true;
         }
         if self
             .busy
             .as_ref()
-            .is_some_and(|b| now.saturating_duration_since(b.since) >= cfg.job_timeout)
+            .is_some_and(|b| now.since(b.since) >= cfg.job_timeout)
         {
             let Some(busy) = self.busy.take() else {
                 unreachable!("the branch above just matched on it")
@@ -103,9 +114,42 @@ impl StateBluetooth {
             } else {
                 "connect"
             };
-            cx.notify("Bluetooth", format!("Failed to {verb} {}", busy.name));
-            cx.probe(Probe::Bt);
+            self.say = Some(format!("Failed to {verb} {}", busy.name));
+            self.want_sample = true;
         }
+    }
+
+    /// Connect the device, or disconnect it if it is already connected. Reading
+    /// the list here rather than at click time means a row that has since moved
+    /// cannot send a command about a device that is no longer there.
+    fn start_device(&mut self, jobs: &mut Jobs, actions: &mut Vec<Action>, mac: String) {
+        if self.busy.is_some() {
+            return;
+        }
+        let Some(dev) = self.bt.devices.iter().find(|d| d.mac == mac) else {
+            return;
+        };
+        let (name, disconnecting) = (dev.name.clone(), dev.connected);
+        let action = if disconnecting {
+            ActionShell::BtDisconnect {
+                mac: mac.clone(),
+                name: name.clone(),
+            }
+        } else {
+            ActionShell::BtConnect {
+                mac: mac.clone(),
+                name: name.clone(),
+            }
+        };
+        let id = jobs.take();
+        actions.push(Action::shell(id, action));
+        self.busy = Some(Busy {
+            id,
+            mac,
+            name,
+            disconnecting,
+            since: self.now,
+        });
     }
 
     fn subtitle(&self) -> &str {
@@ -120,7 +164,7 @@ impl StateBluetooth {
 impl State for StateBluetooth {
     type Event = EventBluetooth;
 
-    fn handle_event(&mut self, cfg: &Config, event: EventBluetooth, cx: &mut Ctx) {
+    fn handle_event(&mut self, cfg: &Config, event: EventBluetooth) {
         match event {
             EventBluetooth::TogglePower => {
                 let on = !self.bt.powered;
@@ -128,76 +172,78 @@ impl State for StateBluetooth {
                 if !on {
                     self.bt.devices.clear();
                 }
-                let id = cx.shell(ActionShell::BtSetPowered { on });
-                self.toggling = Some(Inflight {
-                    id,
-                    since: cx.now(),
-                });
-                if on {
-                    cx.shell(ActionShell::BtScan);
-                }
+                self.want_power = Some(on);
+                self.want_scan = self.want_scan || on;
             }
             EventBluetooth::ToggleDevice { mac } => {
-                if self.busy.is_some() {
-                    return;
+                if self.busy.is_none() && self.want_device.is_none() {
+                    self.want_device = Some(mac);
                 }
-                let Some(dev) = self.bt.devices.iter().find(|d| d.mac == mac) else {
-                    return; // the list moved under the click; ignore it
-                };
-                let (name, disconnecting) = (dev.name.clone(), dev.connected);
-                let action = if disconnecting {
-                    ActionShell::BtDisconnect {
-                        mac: mac.clone(),
-                        name: name.clone(),
-                    }
-                } else {
-                    ActionShell::BtConnect {
-                        mac: mac.clone(),
-                        name: name.clone(),
-                    }
-                };
-                let id = cx.shell(action);
-                self.busy = Some(Busy {
-                    id,
-                    mac,
-                    name,
-                    disconnecting,
-                    since: cx.now(),
-                });
             }
             EventBluetooth::Observed { bt } => {
-                if self.toggling.is_none() {
+                if self.toggling.is_none() && self.want_power.is_none() {
                     self.bt = bt;
                 }
             }
             EventBluetooth::MenuOpened => {
                 self.menu_open = true;
-                if self.bt.powered {
-                    cx.shell(ActionShell::BtScan);
-                }
-                cx.probe(Probe::Bt);
+                self.want_scan = self.want_scan || self.bt.powered;
+                self.want_sample = true;
             }
             EventBluetooth::MenuClosed => self.menu_open = false,
-            EventBluetooth::Tick => self.expire(cfg, cx),
+            EventBluetooth::Tick { now } => {
+                self.now = now;
+                self.expire(cfg);
+            }
             EventBluetooth::Finished { id, ok } => {
                 if self.toggling.is_some_and(|t| t.id == id) {
                     self.toggling = None;
-                    cx.probe(Probe::Bt);
+                    self.want_sample = true;
                 } else if self.busy.as_ref().is_some_and(|b| b.id == id) {
                     let Some(busy) = self.busy.take() else {
                         unreachable!("the branch above just matched on it")
                     };
-                    let msg = match (busy.disconnecting, ok) {
+                    self.say = Some(match (busy.disconnecting, ok) {
                         (true, true) => format!("Disconnected {}", busy.name),
                         (true, false) => format!("Failed to disconnect {}", busy.name),
                         (false, true) => format!("Connected {}", busy.name),
                         (false, false) => format!("Failed to connect {}", busy.name),
-                    };
-                    cx.notify("Bluetooth", msg);
-                    cx.probe(Probe::Bt);
+                    });
+                    self.want_sample = true;
                 }
             }
         }
+    }
+
+    fn emit_actions(
+        &mut self,
+        _cfg: &Config,
+        jobs: &mut Jobs,
+        actions: &mut Vec<Action>,
+    ) -> Option<Req> {
+        if let Some(on) = self.want_power.take() {
+            let id = jobs.take();
+            actions.push(Action::shell(id, ActionShell::BtSetPowered { on }));
+            self.toggling = Some(Inflight {
+                id,
+                since: self.now,
+            });
+        }
+        if std::mem::take(&mut self.want_scan) {
+            actions.push(Action::shell(jobs.take(), ActionShell::BtScan));
+        }
+        if let Some(mac) = self.want_device.take() {
+            self.start_device(jobs, actions, mac);
+        }
+        if let Some(body) = self.say.take() {
+            actions.push(Action::notify(jobs.take(), "Bluetooth", body));
+        }
+        if std::mem::take(&mut self.want_sample) {
+            actions.push(Action::probe(jobs.take(), Probe::Bt));
+        }
+        // A device click deliberately leaves the menu open: pairing takes long
+        // enough that watching the row update is the point.
+        None
     }
 
     fn vars(&self, cfg: &Config, out: &mut WireVars) {

@@ -1,14 +1,14 @@
 //! Wi-Fi: the bar icon and the network dropdown.
 
-use std::time::Instant;
-
+use crate::action::Action;
 use crate::action_shell::ActionShell;
 use crate::config::Config;
-use crate::ctx::Ctx;
-use crate::ctx::Req;
+use crate::jobs::Jobs;
+use crate::millis::Millis;
 use crate::model::NetSnapshot;
 use crate::probe::JobId;
 use crate::probe::Probe;
+use crate::req::Req;
 use crate::state::PollPlan;
 use crate::state::State;
 use crate::util::b64;
@@ -24,20 +24,32 @@ pub struct StateWifi {
     /// the old state and flip the switch back under the user's finger.
     toggling: Option<Inflight>,
     menu_open: bool,
+    now: Millis,
+
+    /// What the batch asked for and has not been sent yet. Two clicks on the
+    /// switch settle to one command, not two that undo each other.
+    want_radio: Option<bool>,
+    want_join: Option<String>,
+    want_scan: bool,
+    want_sample: bool,
+    want_dismiss: bool,
+    /// Told to the user once the batch is over, so a failure that is really a
+    /// cancelled prompt can still be silent.
+    say: Option<String>,
 }
 
 #[derive(Clone, Debug)]
 struct Joining {
     id: JobId,
     ssid: String,
-    since: Instant,
+    since: Millis,
 }
 
 /// A job we are waiting on, and the tick we started waiting at.
 #[derive(Clone, Copy, Debug)]
 struct Inflight {
     id: JobId,
-    since: Instant,
+    since: Millis,
 }
 
 #[derive(Debug)]
@@ -52,7 +64,9 @@ pub enum EventWifi {
     MenuOpened,
     MenuClosed,
     /// The clock moved; give up on anything that has waited too long.
-    Tick,
+    Tick {
+        now: Millis,
+    },
     Finished {
         id: JobId,
         ok: bool,
@@ -79,26 +93,26 @@ impl StateWifi {
     /// Give up on a job that never reported back, so a switch cannot stay
     /// stuck mid-flip and a row cannot say "Connecting…" for the rest of the
     /// session. Asked on every tick; answered from state alone.
-    fn expire(&mut self, cfg: &Config, cx: &mut Ctx) {
-        let now = cx.now();
+    fn expire(&mut self, cfg: &Config) {
+        let now = self.now;
         if self
             .toggling
-            .is_some_and(|t| now.saturating_duration_since(t.since) >= cfg.job_timeout)
+            .is_some_and(|t| now.since(t.since) >= cfg.job_timeout)
         {
             self.toggling = None;
-            cx.probe(Probe::Net);
+            self.want_sample = true;
         }
         if self
             .connecting
             .as_ref()
-            .is_some_and(|j| now.saturating_duration_since(j.since) >= cfg.job_timeout)
+            .is_some_and(|j| now.since(j.since) >= cfg.job_timeout)
         {
             let Some(joining) = self.connecting.take() else {
                 unreachable!("the branch above just matched on it")
             };
-            cx.notify("Wi-Fi", format!("Failed to connect to {}", joining.ssid));
-            cx.request(Req::CloseMenu);
-            cx.probe(Probe::Net);
+            self.say = Some(format!("Failed to connect to {}", joining.ssid));
+            self.want_dismiss = true;
+            self.want_sample = true;
         }
     }
 
@@ -124,7 +138,7 @@ pub(crate) fn signal_icon(signal: u8) -> &'static str {
 impl State for StateWifi {
     type Event = EventWifi;
 
-    fn handle_event(&mut self, cfg: &Config, event: EventWifi, cx: &mut Ctx) {
+    fn handle_event(&mut self, cfg: &Config, event: EventWifi) {
         match event {
             EventWifi::ToggleRadio => {
                 let on = !self.net.enabled;
@@ -135,59 +149,91 @@ impl State for StateWifi {
                     self.net.networks.clear();
                     self.net.connected = None;
                 }
-                let id = cx.shell(ActionShell::WifiSetEnabled { on });
-                self.toggling = Some(Inflight {
-                    id,
-                    since: cx.now(),
-                });
-                if on {
-                    cx.shell(ActionShell::WifiScan);
-                }
+                self.want_radio = Some(on);
+                self.want_scan = self.want_scan || on;
             }
             EventWifi::Connect { ssid } => {
-                if self.connecting.is_some() {
-                    return; // one join at a time; a second click is a mis-click
+                // One join at a time; a second click is a mis-click.
+                if self.connecting.is_none() && self.want_join.is_none() {
+                    self.want_join = Some(ssid);
                 }
-                let id = cx.shell(ActionShell::WifiConnect { ssid: ssid.clone() });
-                self.connecting = Some(Joining {
-                    id,
-                    ssid,
-                    since: cx.now(),
-                });
             }
             EventWifi::Observed { net } => {
-                if self.toggling.is_none() {
+                if self.toggling.is_none() && self.want_radio.is_none() {
                     self.net = net;
                 }
             }
             EventWifi::MenuOpened => {
                 self.menu_open = true;
-                cx.shell(ActionShell::WifiScan);
-                cx.probe(Probe::Net);
+                self.want_scan = true;
+                self.want_sample = true;
             }
             EventWifi::MenuClosed => self.menu_open = false,
-            EventWifi::Tick => self.expire(cfg, cx),
+            EventWifi::Tick { now } => {
+                self.now = now;
+                self.expire(cfg);
+            }
             EventWifi::Finished { id, ok, detail } => {
                 if self.toggling.is_some_and(|t| t.id == id) {
                     self.toggling = None;
-                    cx.probe(Probe::Net);
+                    self.want_sample = true;
                 } else if self.connecting.as_ref().is_some_and(|j| j.id == id) {
                     let Some(joining) = self.connecting.take() else {
                         unreachable!("the branch above just matched on it")
                     };
                     let ssid = joining.ssid;
-                    match (ok, detail) {
-                        (true, _) => cx.notify("Wi-Fi", format!("Connected to {ssid}")),
-                        // A cancelled password prompt is a deliberate no-op, not
-                        // a failure worth a notification.
-                        (false, Some(d)) if d == "cancelled" => {}
-                        (false, _) => cx.notify("Wi-Fi", format!("Failed to connect to {ssid}")),
-                    }
-                    cx.request(Req::CloseMenu);
-                    cx.probe(Probe::Net);
+                    self.say = match (ok, detail) {
+                        (true, _) => Some(format!("Connected to {ssid}")),
+                        // A cancelled password prompt is a deliberate no-op,
+                        // not a failure worth a notification.
+                        (false, Some(d)) if d == "cancelled" => None,
+                        (false, _) => Some(format!("Failed to connect to {ssid}")),
+                    };
+                    self.want_dismiss = true;
+                    self.want_sample = true;
                 }
             }
         }
+    }
+
+    fn emit_actions(
+        &mut self,
+        _cfg: &Config,
+        jobs: &mut Jobs,
+        actions: &mut Vec<Action>,
+    ) -> Option<Req> {
+        if let Some(on) = self.want_radio.take() {
+            let id = jobs.take();
+            actions.push(Action::shell(id, ActionShell::WifiSetEnabled { on }));
+            self.toggling = Some(Inflight {
+                id,
+                since: self.now,
+            });
+        }
+        if std::mem::take(&mut self.want_scan) {
+            actions.push(Action::shell(jobs.take(), ActionShell::WifiScan));
+        }
+        if let Some(ssid) = self.want_join.take() {
+            if self.connecting.is_none() {
+                let id = jobs.take();
+                actions.push(Action::shell(
+                    id,
+                    ActionShell::WifiConnect { ssid: ssid.clone() },
+                ));
+                self.connecting = Some(Joining {
+                    id,
+                    ssid,
+                    since: self.now,
+                });
+            }
+        }
+        if let Some(body) = self.say.take() {
+            actions.push(Action::notify(jobs.take(), "Wi-Fi", body));
+        }
+        if std::mem::take(&mut self.want_sample) {
+            actions.push(Action::probe(jobs.take(), Probe::Net));
+        }
+        std::mem::take(&mut self.want_dismiss).then_some(Req::CloseMenu)
     }
 
     fn vars(&self, cfg: &Config, out: &mut WireVars) {
@@ -332,7 +378,7 @@ mod tests {
         )
         .is_empty());
 
-        let (actions, reqs) = run_full(
+        let (actions, req) = run_full(
             &mut w,
             EventWifi::Finished {
                 id,
@@ -340,7 +386,7 @@ mod tests {
                 detail: None,
             },
         );
-        assert_eq!(reqs, vec![Req::CloseMenu]);
+        assert_eq!(req, Some(Req::CloseMenu));
         assert!(notified(&actions));
         assert!(w.connecting.is_none());
     }

@@ -11,9 +11,11 @@
 
 use std::collections::BTreeMap;
 
+use crate::action::Action;
 use crate::config::Config;
-use crate::ctx::Ctx;
+use crate::jobs::Jobs;
 use crate::probe::Probe;
+use crate::req::Req;
 use crate::wire_vars::WireVars;
 
 /// Interval, in milliseconds, at which a machine wants a probe sampled. Zero
@@ -24,7 +26,23 @@ pub trait State {
     /// This machine's private event alphabet.
     type Event;
 
-    fn handle_event(&mut self, cfg: &Config, event: Self::Event, cx: &mut Ctx);
+    /// Apply one event. This moves state and nothing else: no action may be
+    /// emitted here, because the rest of the batch has not been seen yet.
+    fn handle_event(&mut self, cfg: &Config, event: Self::Event);
+
+    /// Say what has to happen now, given everything the batch left behind.
+    ///
+    /// `&mut self` because actions are not idempotent: what stops the same
+    /// request going out twice is this machine recording that it already asked.
+    /// Anything only the parent can grant comes back as the return value.
+    fn emit_actions(
+        &mut self,
+        _cfg: &Config,
+        _jobs: &mut Jobs,
+        _actions: &mut Vec<Action>,
+    ) -> Option<Req> {
+        None
+    }
 
     /// Publish the eww vars this machine owns. Must be a pure function of
     /// state: the runtime may call it at any time and diffs the result.

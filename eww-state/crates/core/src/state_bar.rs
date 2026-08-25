@@ -11,22 +11,21 @@
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::time::Instant;
 
 use crate::action::Action;
 use crate::config::Config;
-use crate::ctx::Ctx;
-use crate::ctx::Req;
-use crate::ctx::StateId;
 use crate::event::Event;
 use crate::event_clock::EventClock;
 use crate::event_eww::EventEww;
 use crate::event_job::EventJob;
 use crate::event_probe::EventProbe;
 use crate::event_ui::EventUi;
+use crate::jobs::Jobs;
+use crate::millis::Millis;
 use crate::model::MenuId;
 use crate::probe::JobId;
 use crate::probe::Probe;
+use crate::req::Req;
 use crate::state::PollPlan;
 use crate::state::State;
 use crate::state_audio::EventAudio;
@@ -41,6 +40,7 @@ use crate::state_date::EventDate;
 use crate::state_date::StateDate;
 use crate::state_dock::EventDock;
 use crate::state_dock::StateDock;
+use crate::state_id::StateId;
 use crate::state_shot::EventShot;
 use crate::state_shot::StateShot;
 use crate::state_theme::EventTheme;
@@ -50,20 +50,29 @@ use crate::state_wifi::StateWifi;
 use crate::window::Window;
 use crate::wire_vars::WireVars;
 
-/// A widget may ask the bar for something, and satisfying that may make another
-/// widget speak. Bounded so a mistake cannot spin forever.
-const MAX_REQ_ROUNDS: usize = 8;
+/// Granting a machine's request can make another machine speak, whose request
+/// can in turn... Bounded so a mistake cannot spin forever.
+const MAX_EMIT_ROUNDS: usize = 8;
 
 pub struct StateBar {
     cfg: Config,
     /// The clock, as the last tick reported it. Nothing in here ever reads one.
-    now: Instant,
+    now: Millis,
     /// Which dropdown is open. The whole point of the type.
     menu: Option<MenuId>,
     /// The focused workspace holds a fullscreen window, so bar and dock hide.
     fullscreen: bool,
-    next_job: u64,
+    jobs: Jobs,
+    /// Which machine is waiting on each outstanding job.
+    ///
+    /// The bar fills this in structurally — it knows which machine it just
+    /// asked to emit — but it only has to exist because every machine's actions
+    /// share one enum and one id space, so a bare id cannot say where it came
+    /// from. Give each machine its own action type and this goes away.
     owners: BTreeMap<JobId, StateId>,
+    /// Probes the batch asked for. A set, so five things wanting fresh network
+    /// data in one batch cost one sample.
+    due: BTreeSet<Probe>,
 
     audio: StateAudio,
     backlight: StateBacklight,
@@ -77,14 +86,15 @@ pub struct StateBar {
 }
 
 impl StateBar {
-    pub fn new(cfg: Config, now: Instant) -> Self {
+    pub fn new(cfg: Config) -> Self {
         StateBar {
             cfg,
-            now,
+            now: Millis::default(),
             menu: None,
             fullscreen: false,
-            next_job: 0,
+            jobs: Jobs::default(),
             owners: BTreeMap::new(),
+            due: BTreeSet::new(),
             audio: StateAudio::default(),
             backlight: StateBacklight::default(),
             wifi: StateWifi::default(),
@@ -97,14 +107,32 @@ impl StateBar {
         }
     }
 
-    /// Apply a batch of events and collect the side effects they ask for.
+    /// Apply a batch of events. This is the only way state changes, and it
+    /// emits nothing: what the batch adds up to is not known until it is over.
     ///
-    /// This is the only way state changes. It is deterministic, allocates no
-    /// threads, touches no clock and blocks on nothing.
-    pub fn handle_events(&mut self, events: &[Event], actions: &mut Vec<Action>) {
+    /// Deterministic, allocates no threads, touches no clock, blocks on nothing.
+    pub fn handle_events(&mut self, events: &[Event]) {
         for event in events {
-            self.handle_event(event, actions);
+            self.handle_event(event);
         }
+    }
+
+    /// Say what has to happen now, given everything the batch left behind.
+    pub fn emit_actions(&mut self, actions: &mut Vec<Action>) {
+        for _ in 0..MAX_EMIT_ROUNDS {
+            let reqs = self.emit_round(actions);
+            if reqs.is_empty() {
+                return;
+            }
+            // Granting a request routes events of its own, which may leave
+            // another machine with something to say.
+            for req in reqs {
+                match req {
+                    Req::CloseMenu => self.close_menu(),
+                }
+            }
+        }
+        debug_assert!(false, "requests never settled");
     }
 
     pub fn config(&self) -> &Config {
@@ -205,226 +233,173 @@ impl StateBar {
         p
     }
 
-    fn handle_event(&mut self, event: &Event, actions: &mut Vec<Action>) {
-        let mut reqs = Vec::new();
+    fn handle_event(&mut self, event: &Event) {
         match event {
-            Event::FromUi(e) => self.handle_event_ui(e, actions, &mut reqs),
-            Event::FromClock(e) => self.handle_event_clock(e, actions, &mut reqs),
-            Event::FromProbe(e) => self.handle_event_probe(e, actions, &mut reqs),
-            Event::FromJob(e) => self.handle_event_job(e, actions, &mut reqs),
+            Event::FromUi(e) => self.handle_event_ui(e),
+            Event::FromClock(e) => self.handle_event_clock(e),
+            Event::FromProbe(e) => self.handle_event_probe(e),
+            Event::FromJob(e) => self.handle_event_job(e),
             Event::FromEww(e) => self.handle_event_eww(e),
         }
-        self.settle(&mut reqs, actions);
     }
 
-    fn handle_event_ui(&mut self, event: &EventUi, actions: &mut Vec<Action>, reqs: &mut Vec<Req>) {
+    /// One pass over every machine, collecting what each asks of the bar.
+    fn emit_round(&mut self, actions: &mut Vec<Action>) -> Vec<Req> {
+        let mut reqs = Vec::new();
+        for what in std::mem::take(&mut self.due) {
+            actions.push(Action::probe(self.jobs.take(), what));
+        }
+        macro_rules! emit {
+            ($machine:ident, $owner:expr) => {
+                let start = actions.len();
+                let req = self
+                    .$machine
+                    .emit_actions(&self.cfg, &mut self.jobs, actions);
+                for action in &actions[start..] {
+                    // A probe's result arrives as its own event and nobody waits
+                    // on the job, so attributing it would only invite a loop.
+                    if !matches!(action, Action::ToProbe { .. }) {
+                        self.owners.insert(action.id(), $owner);
+                    }
+                }
+                reqs.extend(req);
+            };
+        }
+        emit!(audio, StateId::Audio);
+        emit!(backlight, StateId::Backlight);
+        emit!(wifi, StateId::Wifi);
+        emit!(bluetooth, StateId::Bluetooth);
+        emit!(battery, StateId::Battery);
+        emit!(date, StateId::Date);
+        emit!(theme, StateId::Theme);
+        emit!(dock, StateId::Dock);
+        emit!(shot, StateId::Shot);
+        reqs
+    }
+
+    fn handle_event_ui(&mut self, event: &EventUi) {
         match event {
             EventUi::MenuToggled { menu } => {
                 if self.menu == Some(*menu) {
-                    self.close_menu(actions, reqs);
+                    self.close_menu();
                 } else {
-                    self.open_menu(*menu, actions, reqs);
+                    self.open_menu(*menu);
                 }
             }
-            EventUi::MenuDismissed => self.close_menu(actions, reqs),
-            EventUi::VolumeSet { percent } => {
-                let percent = *percent;
-                self.with(StateId::Audio, actions, reqs, |b, cx| {
-                    b.audio
-                        .handle_event(&b.cfg, EventAudio::Set { percent }, cx)
-                })
-            }
-            EventUi::BrightnessSet { percent } => {
-                let percent = *percent;
-                self.with(StateId::Backlight, actions, reqs, |b, cx| {
-                    b.backlight
-                        .handle_event(&b.cfg, EventBacklight::Set { percent }, cx)
-                })
-            }
-            EventUi::WifiToggled => self.with(StateId::Wifi, actions, reqs, |b, cx| {
-                b.wifi.handle_event(&b.cfg, EventWifi::ToggleRadio, cx)
-            }),
-            EventUi::WifiPicked { ssid } => {
-                let ssid = ssid.clone();
-                self.with(StateId::Wifi, actions, reqs, |b, cx| {
-                    b.wifi.handle_event(&b.cfg, EventWifi::Connect { ssid }, cx)
-                })
-            }
-            EventUi::BtToggled => self.with(StateId::Bluetooth, actions, reqs, |b, cx| {
-                b.bluetooth
-                    .handle_event(&b.cfg, EventBluetooth::TogglePower, cx)
-            }),
-            EventUi::BtPicked { mac } => {
-                let mac = mac.clone();
-                self.with(StateId::Bluetooth, actions, reqs, |b, cx| {
-                    b.bluetooth
-                        .handle_event(&b.cfg, EventBluetooth::ToggleDevice { mac }, cx)
-                })
-            }
-            EventUi::DockLaunched { id } => {
-                let id = id.clone();
-                self.with(StateId::Dock, actions, reqs, |b, cx| {
-                    b.dock.handle_event(&b.cfg, EventDock::Launch { id }, cx)
-                })
-            }
-            EventUi::DockDropped { moved, onto } => {
-                let (moved, onto) = (moved.clone(), onto.clone());
-                self.with(StateId::Dock, actions, reqs, |b, cx| {
-                    b.dock
-                        .handle_event(&b.cfg, EventDock::Swap { moved, onto }, cx)
-                })
-            }
-            EventUi::ShotRequested => self.with(StateId::Shot, actions, reqs, |b, cx| {
-                b.shot.handle_event(&b.cfg, EventShot::Capture, cx)
-            }),
-            EventUi::ShotActed { action } => {
-                let action = *action;
-                self.with(StateId::Shot, actions, reqs, |b, cx| {
-                    b.shot.handle_event(&b.cfg, EventShot::Act { action }, cx)
-                })
-            }
+            EventUi::MenuDismissed => self.close_menu(),
+            EventUi::VolumeSet { percent } => self
+                .audio
+                .handle_event(&self.cfg, EventAudio::Set { percent: *percent }),
+            EventUi::BrightnessSet { percent } => self
+                .backlight
+                .handle_event(&self.cfg, EventBacklight::Set { percent: *percent }),
+            EventUi::WifiToggled => self.wifi.handle_event(&self.cfg, EventWifi::ToggleRadio),
+            EventUi::WifiPicked { ssid } => self
+                .wifi
+                .handle_event(&self.cfg, EventWifi::Connect { ssid: ssid.clone() }),
+            EventUi::BtToggled => self
+                .bluetooth
+                .handle_event(&self.cfg, EventBluetooth::TogglePower),
+            EventUi::BtPicked { mac } => self
+                .bluetooth
+                .handle_event(&self.cfg, EventBluetooth::ToggleDevice { mac: mac.clone() }),
+            EventUi::DockLaunched { id } => self
+                .dock
+                .handle_event(&self.cfg, EventDock::Launch { id: id.clone() }),
+            EventUi::DockDropped { moved, onto } => self.dock.handle_event(
+                &self.cfg,
+                EventDock::Swap {
+                    moved: moved.clone(),
+                    onto: onto.clone(),
+                },
+            ),
+            EventUi::ShotRequested => self.shot.handle_event(&self.cfg, EventShot::Capture),
+            EventUi::ShotActed { action } => self
+                .shot
+                .handle_event(&self.cfg, EventShot::Act { action: *action }),
         }
     }
 
     /// The clock moved. Nothing here decides what that means: the tick goes to
     /// every machine that has something to give up on, and each answers from
     /// its own state.
-    fn handle_event_clock(
-        &mut self,
-        event: &EventClock,
-        actions: &mut Vec<Action>,
-        reqs: &mut Vec<Req>,
-    ) {
+    fn handle_event_clock(&mut self, event: &EventClock) {
         let EventClock::Tick { now } = event;
         debug_assert!(*now >= self.now, "the clock went backwards");
         self.now = *now;
-        self.with(StateId::Wifi, actions, reqs, |b, cx| {
-            b.wifi.handle_event(&b.cfg, EventWifi::Tick, cx)
-        });
-        self.with(StateId::Bluetooth, actions, reqs, |b, cx| {
-            b.bluetooth.handle_event(&b.cfg, EventBluetooth::Tick, cx)
-        });
-        self.with(StateId::Shot, actions, reqs, |b, cx| {
-            b.shot.handle_event(&b.cfg, EventShot::Tick, cx)
-        });
+        self.wifi
+            .handle_event(&self.cfg, EventWifi::Tick { now: *now });
+        self.bluetooth
+            .handle_event(&self.cfg, EventBluetooth::Tick { now: *now });
+        self.shot
+            .handle_event(&self.cfg, EventShot::Tick { now: *now });
     }
 
-    fn handle_event_probe(
-        &mut self,
-        event: &EventProbe,
-        actions: &mut Vec<Action>,
-        reqs: &mut Vec<Req>,
-    ) {
+    fn handle_event_probe(&mut self, event: &EventProbe) {
         match event {
             EventProbe::Due { what } => {
-                let what = *what;
-                self.with(StateId::Bar, actions, reqs, |_, cx| {
-                    cx.probe(what);
-                })
+                self.due.insert(*what);
             }
-            EventProbe::Theme { theme } => {
-                let theme = *theme;
-                self.with(StateId::Theme, actions, reqs, |b, cx| {
-                    b.theme
-                        .handle_event(&b.cfg, EventTheme::Observed { theme }, cx)
-                })
-            }
-            EventProbe::Date { text } => {
-                let text = text.clone();
-                self.with(StateId::Date, actions, reqs, |b, cx| {
-                    b.date
-                        .handle_event(&b.cfg, EventDate::Observed { text }, cx)
-                })
-            }
-            EventProbe::Battery { battery } => {
-                let battery = *battery;
-                self.with(StateId::Battery, actions, reqs, |b, cx| {
-                    b.battery
-                        .handle_event(&b.cfg, EventBattery::Observed { battery }, cx)
-                })
-            }
-            EventProbe::Audio { audio } => {
-                let audio = *audio;
-                self.with(StateId::Audio, actions, reqs, |b, cx| {
-                    b.audio
-                        .handle_event(&b.cfg, EventAudio::Observed { audio }, cx)
-                })
-            }
-            EventProbe::Backlight { percent } => {
-                let percent = *percent;
-                self.with(StateId::Backlight, actions, reqs, |b, cx| {
-                    b.backlight
-                        .handle_event(&b.cfg, EventBacklight::Observed { percent }, cx)
-                })
-            }
-            EventProbe::Net { net } => {
-                let net = net.clone();
-                self.with(StateId::Wifi, actions, reqs, |b, cx| {
-                    b.wifi.handle_event(&b.cfg, EventWifi::Observed { net }, cx)
-                })
-            }
-            EventProbe::Bt { bt } => {
-                let bt = bt.clone();
-                self.with(StateId::Bluetooth, actions, reqs, |b, cx| {
-                    b.bluetooth
-                        .handle_event(&b.cfg, EventBluetooth::Observed { bt }, cx)
-                })
-            }
-            EventProbe::Dock { apps } => {
-                let apps = apps.clone();
-                self.with(StateId::Dock, actions, reqs, |b, cx| {
-                    b.dock
-                        .handle_event(&b.cfg, EventDock::Observed { apps }, cx)
-                })
-            }
+            EventProbe::Theme { theme } => self
+                .theme
+                .handle_event(&self.cfg, EventTheme::Observed { theme: *theme }),
+            EventProbe::Date { text } => self
+                .date
+                .handle_event(&self.cfg, EventDate::Observed { text: text.clone() }),
+            EventProbe::Battery { battery } => self
+                .battery
+                .handle_event(&self.cfg, EventBattery::Observed { battery: *battery }),
+            EventProbe::Audio { audio } => self
+                .audio
+                .handle_event(&self.cfg, EventAudio::Observed { audio: *audio }),
+            EventProbe::Backlight { percent } => self
+                .backlight
+                .handle_event(&self.cfg, EventBacklight::Observed { percent: *percent }),
+            EventProbe::Net { net } => self
+                .wifi
+                .handle_event(&self.cfg, EventWifi::Observed { net: net.clone() }),
+            EventProbe::Bt { bt } => self
+                .bluetooth
+                .handle_event(&self.cfg, EventBluetooth::Observed { bt: bt.clone() }),
+            EventProbe::Dock { apps } => self
+                .dock
+                .handle_event(&self.cfg, EventDock::Observed { apps: apps.clone() }),
             EventProbe::Fullscreen { on } => self.fullscreen = *on,
         }
     }
 
-    fn handle_event_job(
-        &mut self,
-        event: &EventJob,
-        actions: &mut Vec<Action>,
-        reqs: &mut Vec<Req>,
-    ) {
+    fn handle_event_job(&mut self, event: &EventJob) {
         match event {
-            EventJob::ShotStaged { shot } => {
-                let shot = shot.clone();
-                self.with(StateId::Shot, actions, reqs, |b, cx| {
-                    b.shot.handle_event(&b.cfg, EventShot::Staged { shot }, cx)
-                })
-            }
+            EventJob::ShotStaged { shot } => self
+                .shot
+                .handle_event(&self.cfg, EventShot::Staged { shot: shot.clone() }),
             EventJob::Finished { id, ok, detail } => {
                 let (id, ok) = (*id, *ok);
                 let Some(owner) = self.owners.remove(&id) else {
                     return; // a job from a previous life; nothing is waiting on it
                 };
                 match owner {
-                    StateId::Audio => self.with(StateId::Audio, actions, reqs, |b, cx| {
-                        b.audio.handle_event(&b.cfg, EventAudio::Finished, cx)
-                    }),
-                    StateId::Backlight => self.with(StateId::Backlight, actions, reqs, |b, cx| {
-                        b.backlight
-                            .handle_event(&b.cfg, EventBacklight::Finished, cx)
-                    }),
-                    StateId::Wifi => {
-                        let detail = detail.clone();
-                        self.with(StateId::Wifi, actions, reqs, |b, cx| {
-                            b.wifi
-                                .handle_event(&b.cfg, EventWifi::Finished { id, ok, detail }, cx)
-                        })
-                    }
-                    StateId::Bluetooth => self.with(StateId::Bluetooth, actions, reqs, |b, cx| {
-                        b.bluetooth
-                            .handle_event(&b.cfg, EventBluetooth::Finished { id, ok }, cx)
-                    }),
-                    StateId::Battery => self.with(StateId::Battery, actions, reqs, |b, cx| {
-                        b.battery
-                            .handle_event(&b.cfg, EventBattery::Finished { id, ok }, cx)
-                    }),
-                    StateId::Shot => self.with(StateId::Shot, actions, reqs, |b, cx| {
-                        b.shot.handle_event(&b.cfg, EventShot::Finished { id }, cx)
-                    }),
+                    StateId::Audio => self.audio.handle_event(&self.cfg, EventAudio::Finished),
+                    StateId::Backlight => self
+                        .backlight
+                        .handle_event(&self.cfg, EventBacklight::Finished),
+                    StateId::Wifi => self.wifi.handle_event(
+                        &self.cfg,
+                        EventWifi::Finished {
+                            id,
+                            ok,
+                            detail: detail.clone(),
+                        },
+                    ),
+                    StateId::Bluetooth => self
+                        .bluetooth
+                        .handle_event(&self.cfg, EventBluetooth::Finished { id, ok }),
+                    StateId::Battery => self
+                        .battery
+                        .handle_event(&self.cfg, EventBattery::Finished { id, ok }),
+                    StateId::Shot => self
+                        .shot
+                        .handle_event(&self.cfg, EventShot::Finished { id }),
                     StateId::Date | StateId::Theme | StateId::Dock | StateId::Bar => {}
                 }
             }
@@ -439,99 +414,52 @@ impl StateBar {
         }
     }
 
-    /// Grant what the sub-machines asked for, and whatever that in turn raises.
-    fn settle(&mut self, reqs: &mut Vec<Req>, actions: &mut Vec<Action>) {
-        for _ in 0..MAX_REQ_ROUNDS {
-            if reqs.is_empty() {
-                return;
-            }
-            for req in std::mem::take(reqs) {
-                match req {
-                    Req::CloseMenu => self.close_menu(actions, reqs),
-                }
-            }
-        }
-        debug_assert!(reqs.is_empty(), "requests never settled: {reqs:?}");
-    }
-
-    fn open_menu(&mut self, m: MenuId, actions: &mut Vec<Action>, reqs: &mut Vec<Req>) {
+    fn open_menu(&mut self, m: MenuId) {
         if let Some(prev) = self.menu.replace(m) {
-            self.tell_menu(prev, false, actions, reqs);
+            self.tell_menu(prev, false);
         }
-        self.tell_menu(m, true, actions, reqs);
+        self.tell_menu(m, true);
     }
 
-    fn close_menu(&mut self, actions: &mut Vec<Action>, reqs: &mut Vec<Req>) {
+    fn close_menu(&mut self) {
         if let Some(prev) = self.menu.take() {
-            self.tell_menu(prev, false, actions, reqs);
+            self.tell_menu(prev, false);
         }
     }
 
     /// Let the machine behind a dropdown know it came into or out of view, so
     /// it can refresh and choose its poll rate.
-    fn tell_menu(
-        &mut self,
-        m: MenuId,
-        opened: bool,
-        actions: &mut Vec<Action>,
-        reqs: &mut Vec<Req>,
-    ) {
+    fn tell_menu(&mut self, m: MenuId, opened: bool) {
         match m {
-            MenuId::Wifi => self.with(StateId::Wifi, actions, reqs, |b, cx| {
+            MenuId::Wifi => {
                 let event = if opened {
                     EventWifi::MenuOpened
                 } else {
                     EventWifi::MenuClosed
                 };
-                b.wifi.handle_event(&b.cfg, event, cx)
-            }),
-            MenuId::Bt => self.with(StateId::Bluetooth, actions, reqs, |b, cx| {
+                self.wifi.handle_event(&self.cfg, event)
+            }
+            MenuId::Bt => {
                 let event = if opened {
                     EventBluetooth::MenuOpened
                 } else {
                     EventBluetooth::MenuClosed
                 };
-                b.bluetooth.handle_event(&b.cfg, event, cx)
-            }),
+                self.bluetooth.handle_event(&self.cfg, event)
+            }
             // The sliders have no open/closed state of their own; they just want
             // a fresh value the moment they appear.
             MenuId::Volume => {
                 if opened {
-                    self.with(StateId::Audio, actions, reqs, |_, cx| {
-                        cx.probe(Probe::Audio);
-                    })
+                    self.due.insert(Probe::Audio);
                 }
             }
             MenuId::Brightness => {
                 if opened {
-                    self.with(StateId::Backlight, actions, reqs, |_, cx| {
-                        cx.probe(Probe::Backlight);
-                    })
+                    self.due.insert(Probe::Backlight);
                 }
             }
         }
-    }
-
-    /// Run `f` with a `Ctx` that attributes anything it dispatches to `owner`.
-    fn with(
-        &mut self,
-        owner: StateId,
-        actions: &mut Vec<Action>,
-        reqs: &mut Vec<Req>,
-        f: impl FnOnce(&mut StateBar, &mut Ctx),
-    ) {
-        // Split the borrow: the closure gets the sub-machines, the Ctx gets the
-        // bookkeeping. Taking them out and putting them back is the price of
-        // keeping their code free of any reference to the bar.
-        let now = self.now;
-        let mut next_job = self.next_job;
-        let mut owners = std::mem::take(&mut self.owners);
-        {
-            let mut cx = Ctx::new(owner, now, &mut next_job, actions, &mut owners, reqs);
-            f(self, &mut cx);
-        }
-        self.next_job = next_job;
-        self.owners = owners;
     }
 }
 
@@ -547,7 +475,7 @@ mod tests {
     use eval::eval;
 
     fn bar() -> StateBar {
-        StateBar::new(Config::new("/i", "/c"), Instant::now())
+        StateBar::new(Config::new("/i", "/c"))
     }
 
     fn names(b: &StateBar) -> Vec<String> {
@@ -616,11 +544,19 @@ mod tests {
         assert!(!names(&b).contains(&"shot-menu".to_string()));
     }
 
+    /// Apply a batch and hand back what it asked for.
+    fn turn(b: &mut StateBar, events: &[Event]) -> Vec<Action> {
+        let mut actions = Vec::new();
+        b.handle_events(events);
+        b.emit_actions(&mut actions);
+        actions
+    }
+
     #[test]
     fn a_successful_join_dismisses_the_menu() {
         let mut b = bar();
-        let mut actions = Vec::new();
-        b.handle_events(
+        let actions = turn(
+            &mut b,
             &[
                 Event::FromProbe(EventProbe::Net {
                     net: NetSnapshot {
@@ -640,7 +576,6 @@ mod tests {
                     ssid: "cafe".into(),
                 }),
             ],
-            &mut actions,
         );
         let id = actions
             .iter()
@@ -686,10 +621,9 @@ mod tests {
     #[test]
     fn a_probe_result_does_not_ask_for_another_probe() {
         let mut b = bar();
-        let mut actions = Vec::new();
-        b.handle_events(
+        let actions = turn(
+            &mut b,
             &[Event::FromProbe(EventProbe::Due { what: Probe::Audio })],
-            &mut actions,
         );
         let id = actions[0].id();
 
@@ -712,7 +646,7 @@ mod tests {
     #[test]
     fn a_toggle_that_never_reports_back_lets_go_on_its_own() {
         let mut b = bar();
-        let start = Instant::now();
+        let start = Millis::default();
         let timeout = b.config().job_timeout;
         eval!(&mut b,
             < Event::FromUi(EventUi::WifiToggled),
@@ -720,7 +654,7 @@ mod tests {
             > Action::ToShell { action: ActionShell::WifiScan, .. },
 
             // The job is still out, so a tick inside the timeout changes nothing.
-            < Event::FromClock(EventClock::Tick { now: start + timeout / 2 }),
+            < Event::FromClock(EventClock::Tick { now: start + Millis(timeout.0 / 2) }),
 
             < Event::FromClock(EventClock::Tick { now: start + timeout }),
             > Action::ToProbe { action: ActionProbe::Sample { what: Probe::Net }, .. },

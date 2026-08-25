@@ -4,15 +4,16 @@
 //! dismiss an open bar menu, and clicking outside the preview must not dismiss
 //! one either, so this machine owns its own window and its own backdrop.
 
-use std::time::Instant;
-
+use crate::action::Action;
 use crate::action_file::ActionFile;
 use crate::action_shell::ActionShell;
 use crate::config::Config;
-use crate::ctx::Ctx;
+use crate::jobs::Jobs;
+use crate::millis::Millis;
 use crate::model::Shot;
 use crate::model::ShotAction;
 use crate::probe::JobId;
+use crate::req::Req;
 use crate::state::State;
 use crate::wire_vars::WireVars;
 
@@ -22,13 +23,21 @@ pub struct StateShot {
     /// A capture is running: the region selector is on screen. A second Print
     /// while it is up is dropped, which is what the lock file used to be for.
     capturing: Option<Inflight>,
+    /// Print was pressed. Whether that turns into a capture is decided once the
+    /// batch is over, so mashing the key is one selector rather than a stack.
+    wanted: bool,
+    /// Staged files nobody owns any more, waiting to be reaped.
+    orphans: Vec<String>,
+    /// What the user pressed on the preview, and the file it was about.
+    acted: Option<(ShotAction, String)>,
+    now: Millis,
 }
 
 /// The capture we are waiting on, and the tick we started waiting at.
 #[derive(Clone, Copy, Debug)]
 struct Inflight {
     id: JobId,
-    since: Instant,
+    since: Millis,
 }
 
 #[derive(Debug)]
@@ -42,7 +51,9 @@ pub enum EventShot {
         action: ShotAction,
     },
     /// The clock moved; give up on a selection nobody is making any more.
-    Tick,
+    Tick {
+        now: Millis,
+    },
     Finished {
         id: JobId,
     },
@@ -71,17 +82,9 @@ impl StateShot {
 impl State for StateShot {
     type Event = EventShot;
 
-    fn handle_event(&mut self, cfg: &Config, event: EventShot, cx: &mut Ctx) {
+    fn handle_event(&mut self, cfg: &Config, event: EventShot) {
         match event {
-            EventShot::Capture => {
-                if self.capturing.is_none() {
-                    let id = cx.shell(ActionShell::Capture);
-                    self.capturing = Some(Inflight {
-                        id,
-                        since: cx.now(),
-                    });
-                }
-            }
+            EventShot::Capture => self.wanted = true,
             EventShot::Finished { id } => {
                 if self.capturing.is_some_and(|c| c.id == id) {
                     self.capturing = None;
@@ -89,11 +92,11 @@ impl State for StateShot {
             }
             // A selector the user walked away from would otherwise block every
             // later Print press, since only one capture may be in flight.
-            EventShot::Tick => {
-                let now = cx.now();
+            EventShot::Tick { now } => {
+                self.now = now;
                 if self
                     .capturing
-                    .is_some_and(|c| now.saturating_duration_since(c.since) >= cfg.capture_timeout)
+                    .is_some_and(|c| now.since(c.since) >= cfg.capture_timeout)
                 {
                     self.capturing = None;
                 }
@@ -104,7 +107,7 @@ impl State for StateShot {
                 if let Some(prev) = self.staged.replace(shot) {
                     let keep = self.staged.as_ref().is_some_and(|s| s.path == prev.path);
                     if !keep {
-                        cx.file(ActionFile::DeleteShot { path: prev.path });
+                        self.orphans.push(prev.path);
                     }
                 }
             }
@@ -112,22 +115,45 @@ impl State for StateShot {
                 let Some(shot) = self.staged.take() else {
                     return;
                 };
-                match action {
-                    ShotAction::Copy => {
-                        cx.shell(ActionShell::CopyShot { path: shot.path });
-                    }
-                    ShotAction::Save => {
-                        cx.file(ActionFile::SaveShot { path: shot.path });
-                    }
-                    ShotAction::Discard => {
-                        cx.file(ActionFile::DeleteShot { path: shot.path });
-                    }
-                    // Click-outside leaves the file staged: the next capture
-                    // reaps it, and nothing is lost if the dismissal was a slip.
-                    ShotAction::Dismiss => {}
-                }
+                self.acted = Some((action, shot.path));
             }
         }
+    }
+
+    fn emit_actions(
+        &mut self,
+        _cfg: &Config,
+        jobs: &mut Jobs,
+        actions: &mut Vec<Action>,
+    ) -> Option<Req> {
+        if std::mem::take(&mut self.wanted) && self.capturing.is_none() {
+            let id = jobs.take();
+            actions.push(Action::shell(id, ActionShell::Capture));
+            self.capturing = Some(Inflight {
+                id,
+                since: self.now,
+            });
+        }
+        for path in std::mem::take(&mut self.orphans) {
+            actions.push(Action::file(jobs.take(), ActionFile::DeleteShot { path }));
+        }
+        if let Some((action, path)) = self.acted.take() {
+            match action {
+                ShotAction::Copy => {
+                    actions.push(Action::shell(jobs.take(), ActionShell::CopyShot { path }));
+                }
+                ShotAction::Save => {
+                    actions.push(Action::file(jobs.take(), ActionFile::SaveShot { path }));
+                }
+                ShotAction::Discard => {
+                    actions.push(Action::file(jobs.take(), ActionFile::DeleteShot { path }));
+                }
+                // Click-outside leaves the file staged: the next capture reaps
+                // it, and nothing is lost if the dismissal was a slip.
+                ShotAction::Dismiss => {}
+            }
+        }
+        None
     }
 
     fn vars(&self, cfg: &Config, out: &mut WireVars) {
