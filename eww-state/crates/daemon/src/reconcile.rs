@@ -8,8 +8,8 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use eww_state_core::Window;
-use eww_state_core::WireVars;
+use api::WireVars;
+use module_bar::Window;
 
 /// The eww commands we need. Abstracted so the reconciliation logic can be
 /// tested without a compositor.
@@ -103,7 +103,7 @@ impl Reconciler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use eww_state_core::MenuId;
+    use module_bar::MenuId;
 
     #[derive(Default)]
     struct Fake {

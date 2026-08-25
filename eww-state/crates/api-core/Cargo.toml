@@ -1,0 +1,9 @@
+[package]
+name = "api-core"
+version.workspace = true
+edition.workspace = true
+
+# No dependencies, by design, and no widget knows anything about another
+# through here: this crate is the few types a module and its parent both have
+# to name, and nothing else.
+[dependencies]

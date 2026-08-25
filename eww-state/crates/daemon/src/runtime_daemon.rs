@@ -16,13 +16,13 @@ use std::sync::mpsc::Sender;
 use std::sync::Arc;
 use std::time::Duration;
 
-use eww_state_core::Action;
-use eww_state_core::Config;
-use eww_state_core::Event;
-use eww_state_core::EventEww;
-use eww_state_core::Probe;
-use eww_state_core::StateBar;
-use eww_state_core::WireVars;
+use api::WireVars;
+use module_bar::Action;
+use module_bar::ConfigBar;
+use module_bar::Event;
+use module_bar::EventBar;
+use module_bar::ModuleId;
+use module_bar::StateBar;
 
 use crate::eww_cli::EwwCli;
 use crate::hypr;
@@ -30,6 +30,8 @@ use crate::ipc;
 use crate::ipc::Query;
 use crate::paths::Paths;
 use crate::reconcile::Reconciler;
+use crate::runtime_perform;
+use crate::runtime_perform::Places;
 use crate::ticker::Scheduler;
 
 /// Anything the event loop can receive.
@@ -45,7 +47,7 @@ pub enum Msg {
 const EWW_HEALTH_INTERVAL: Duration = Duration::from_secs(5);
 
 pub struct RuntimeDaemon {
-    paths: Paths,
+    places: Places,
     events: Sender<Event>,
 }
 
@@ -65,8 +67,16 @@ impl RuntimeDaemon {
 
         // Actions speak plain events; adapt them onto the loop's channel here
         // so nothing outside this module needs to know about `Msg`.
+        let mut state = StateBar::new(ConfigBar::new(
+            &Paths::str(&paths.icons),
+            &Paths::str(&paths.cache),
+        ));
         let runtime = Arc::new(RuntimeDaemon {
-            paths: paths.clone(),
+            places: Places::new(
+                &paths,
+                crate::accent_hex(),
+                state.date().format().to_string(),
+            ),
             events: adapt(tx.clone()),
         });
         watch_eww(&paths, tx.clone());
@@ -75,11 +85,6 @@ impl RuntimeDaemon {
         eww.ensure_daemon();
         let mut reconciler = Reconciler::new();
         reconciler.reset(&mut eww);
-
-        let mut state = StateBar::new(Config::new(
-            Paths::str(&paths.icons),
-            Paths::str(&paths.cache),
-        ));
 
         tracing::info!(commit = crate::log::COMMIT, "daemon started");
         // Populate everything before the first interval elapses.
@@ -96,7 +101,7 @@ impl RuntimeDaemon {
 
                 if events
                     .iter()
-                    .any(|e| matches!(e, Event::FromEww(EventEww::Restarted)))
+                    .any(|e| matches!(e, Event::Bar(EventBar::EwwRestarted)))
                 {
                     tracing::warn!("eww went away; republishing");
                     eww.ensure_daemon();
@@ -141,27 +146,15 @@ impl RuntimeDaemon {
         }
     }
 
-    /// Dispatch only. Nothing here decides anything: the outcome goes back to
-    /// the machine, which owns what it means.
+    /// Dispatch only. Nothing here decides anything: the module that owns the
+    /// action carries it out, and whatever it has to say re-enters as an event.
     fn perform_action(&self, action: Action) {
-        let id = action.id();
-        let (ok, detail) = match action {
-            Action::ToProbe { action, .. } => self.perform_action_probe(action),
-            Action::ToShell { action, .. } => self.perform_action_shell(action),
-            Action::ToFile { action, .. } => self.perform_action_file(action),
-        };
-        self.send(Event::FromJob(eww_state_core::EventJob::Finished {
-            id,
-            ok,
-            detail,
-        }));
+        for event in runtime_perform::perform(&action, &self.places) {
+            self.send(event);
+        }
     }
 
-    pub(crate) fn paths(&self) -> &Paths {
-        &self.paths
-    }
-
-    pub(crate) fn send(&self, event: Event) {
+    fn send(&self, event: Event) {
         if self.events.send(event).is_err() {
             tracing::debug!("the loop has gone; dropping an event");
         }
@@ -176,7 +169,7 @@ impl RuntimeDaemon {
 /// history a bug report needs would be gone. `EWW_STATE_LOG=debug` brings them
 /// back.
 fn log_turn(turn: u64, events: &[Event], actions: &[Action]) {
-    let quiet = actions.is_empty() && events.iter().all(|e| matches!(e, Event::FromClock(_)));
+    let quiet = actions.is_empty() && events.iter().all(|e| matches!(e, Event::Clock(_)));
     if quiet {
         tracing::debug!(turn, n = events.len(), events = ?events, "state -> events");
         tracing::debug!(turn, n = 0, "state <- actions");
@@ -244,7 +237,7 @@ fn watch_eww(paths: &Paths, tx: Sender<Msg>) {
                 let alive = eww.alive();
                 // Only on the transition: a dead eww shouldn't produce a reset
                 // event every five seconds.
-                let restarted = Event::FromEww(EventEww::Restarted);
+                let restarted = Event::Bar(EventBar::EwwRestarted);
                 if alive && !was_alive && tx.send(Msg::Ev(restarted)).is_err() {
                     return;
                 }
@@ -287,14 +280,12 @@ fn render_windows(state: &StateBar) -> String {
         .join("\n")
 }
 
-fn render_polls(plan: &BTreeMap<Probe, u32>) -> String {
-    plan.iter()
-        .map(|(p, ms)| {
-            if *ms == 0 {
-                format!("{}: on demand", p.as_str())
-            } else {
-                format!("{}: {}ms", p.as_str(), ms)
-            }
+fn render_polls(plan: &BTreeMap<ModuleId, u32>) -> String {
+    ModuleId::ALL
+        .iter()
+        .map(|id| match plan.get(id) {
+            Some(ms) => format!("{}: {}ms", id.as_str(), ms),
+            None => format!("{}: on demand", id.as_str()),
         })
         .collect::<Vec<_>>()
         .join("\n")

@@ -2,7 +2,6 @@
 
 use std::path::PathBuf;
 
-use crate::proc;
 use crate::reconcile::EwwSink;
 
 pub struct EwwCli {
@@ -19,7 +18,7 @@ impl EwwCli {
         // line; the current directory is what eww would default to anyway.
         let mut all = vec!["-c", self.config_dir.to_str().unwrap_or(".")];
         all.extend_from_slice(args);
-        proc::ok("eww", &all)
+        exec::ok("eww", &all)
     }
 
     /// Is the eww daemon reachable?

@@ -3,6 +3,10 @@
 version = 4
 
 [[package]]
+name = "api-core"
+version = "0.1.0"
+
+[[package]]
 name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12,25 +16,20 @@ checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 name = "eww-state"
 version = "0.1.0"
 dependencies = [
- "eww-state-core",
+ "api-core",
+ "module-audio",
+ "module-backlight",
+ "module-bar",
+ "module-battery",
+ "module-bluetooth",
+ "module-date",
+ "module-dock",
+ "module-shot",
+ "module-theme",
+ "module-wifi",
  "tracing",
  "tracing-subscriber",
-]
-
-[[package]]
-name = "eww-state-core"
-version = "0.1.0"
-dependencies = [
- "eww-state-eval",
-]
-
-[[package]]
-name = "eww-state-eval"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 3.0.4",
+ "util-exec",
 ]
 
 [[package]]
@@ -38,6 +37,98 @@ name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
+
+[[package]]
+name = "module-audio"
+version = "0.1.0"
+dependencies = [
+ "api-core",
+ "util-exec",
+]
+
+[[package]]
+name = "module-backlight"
+version = "0.1.0"
+dependencies = [
+ "api-core",
+ "util-exec",
+]
+
+[[package]]
+name = "module-bar"
+version = "0.1.0"
+dependencies = [
+ "api-core",
+ "module-audio",
+ "module-backlight",
+ "module-battery",
+ "module-bluetooth",
+ "module-date",
+ "module-dock",
+ "module-shot",
+ "module-theme",
+ "module-wifi",
+ "util-eval",
+]
+
+[[package]]
+name = "module-battery"
+version = "0.1.0"
+dependencies = [
+ "api-core",
+ "util-exec",
+]
+
+[[package]]
+name = "module-bluetooth"
+version = "0.1.0"
+dependencies = [
+ "api-core",
+ "util-exec",
+]
+
+[[package]]
+name = "module-date"
+version = "0.1.0"
+dependencies = [
+ "api-core",
+ "util-exec",
+]
+
+[[package]]
+name = "module-dock"
+version = "0.1.0"
+dependencies = [
+ "api-core",
+ "tracing",
+ "util-exec",
+]
+
+[[package]]
+name = "module-shot"
+version = "0.1.0"
+dependencies = [
+ "api-core",
+ "tracing",
+ "util-exec",
+]
+
+[[package]]
+name = "module-theme"
+version = "0.1.0"
+dependencies = [
+ "api-core",
+ "util-exec",
+]
+
+[[package]]
+name = "module-wifi"
+version = "0.1.0"
+dependencies = [
+ "api-core",
+ "util-eval",
+ "util-exec",
+]
 
 [[package]]
 name = "once_cell"
@@ -156,3 +247,19 @@ name = "unicode-ident"
 version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
+
+[[package]]
+name = "util-eval"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.4",
+]
+
+[[package]]
+name = "util-exec"
+version = "0.1.0"
+dependencies = [
+ "tracing",
+]

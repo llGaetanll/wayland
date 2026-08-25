@@ -1,0 +1,8 @@
+[package]
+name = "module-battery"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+api = { path = "../api-core", package = "api-core" }
+exec = { path = "../util-exec", package = "util-exec" }

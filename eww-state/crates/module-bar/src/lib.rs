@@ -1,0 +1,31 @@
+//! The bar: the root state machine, and the only thing that knows every module.
+//!
+//! Nothing here decides how Wi-Fi works or what a battery pill looks like. It
+//! routes an event to the one module it belongs to, re-labels that module's
+//! actions on the way out, and owns the two facts no module can own alone —
+//! which dropdown is open, and whether a fullscreen Space is focused.
+//!
+//! Adding a widget is a new `module-*` crate, one variant in [`Event`], one in
+//! [`Action`], and one line in the routing. It is not a change to any other
+//! module.
+
+pub mod action;
+pub mod config;
+pub mod event;
+pub mod event_bar;
+pub mod event_clock;
+pub mod menu;
+pub mod module_id;
+pub mod state;
+pub mod window;
+
+pub use action::Action;
+pub use config::ConfigBar;
+pub use event::Event;
+pub use event_bar::EventBar;
+pub use event_clock::EventClock;
+pub use menu::MenuId;
+pub use module_id::ModuleId;
+pub use module_id::PollPlan;
+pub use state::StateBar;
+pub use window::Window;

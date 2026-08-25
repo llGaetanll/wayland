@@ -9,6 +9,17 @@ name = "eww-state"
 path = "src/main.rs"
 
 [dependencies]
-eww-state-core = { path = "../core" }
+api = { path = "../api-core", package = "api-core" }
+exec = { path = "../util-exec", package = "util-exec" }
+module-bar = { path = "../module-bar" }
+module-audio = { path = "../module-audio" }
+module-backlight = { path = "../module-backlight" }
+module-battery = { path = "../module-battery" }
+module-bluetooth = { path = "../module-bluetooth" }
+module-date = { path = "../module-date" }
+module-dock = { path = "../module-dock" }
+module-shot = { path = "../module-shot" }
+module-theme = { path = "../module-theme" }
+module-wifi = { path = "../module-wifi" }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["std", "fmt"] }

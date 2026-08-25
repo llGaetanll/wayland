@@ -436,6 +436,25 @@ small and each one shows up in the failure messages:
 An `eval!` here would take `Intent`/`Obs` in and `Action` out, and the same
 shape applies unchanged.
 
+### Where the tests live
+
+**Every `eval!` test is in that crate's `tests/`, never beside the machine.**
+An inline `mod tests` grows until the file is mostly test, and the rules it is
+testing are the part nobody can find any more. A machine file should be short
+enough to read in one sitting; the conversations it can have are a separate
+document.
+
+It buys a second thing, and it is the one that matters more. An integration test
+can only reach the public surface, so a test that wants to know whether a radio
+toggle is still in flight has to ask a question the program can also ask —
+`settling()`, `vars()`, the actions that came out — instead of reading a private
+field. Every time that pinches, it has found either a missing accessor or a test
+asserting on the machine's diary rather than its behaviour.
+
+Unit tests do stay inline: a parser, an icon threshold, a bit of arithmetic. The
+line is whether the test drives the machine. If it says `eval!`, it lives in
+`tests/`.
+
 ### The rest of it
 
 **No snapshot testing.** Not inline, not in files. A snapshot asserts on a

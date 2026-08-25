@@ -1,6 +1,6 @@
-//! Interval scheduling for probes, and the clock the machine runs on.
+//! Interval scheduling, and the clock the machine runs on.
 //!
-//! Each probe gets one thread that sleeps until its next sample is due. The
+//! Each module gets one thread that sleeps until its next sample is due. The
 //! interval is not fixed: the state machine recomputes it after every batch
 //! (an open menu wants fresher data than a bar icon), and a change takes effect
 //! immediately rather than after the current sleep runs out.
@@ -17,11 +17,10 @@ use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 
-use eww_state_core::Event;
-use eww_state_core::EventClock;
-use eww_state_core::EventProbe;
-use eww_state_core::Millis;
-use eww_state_core::Probe;
+use api::Millis;
+use module_bar::Event;
+use module_bar::EventClock;
+use module_bar::ModuleId;
 
 use crate::runtime_daemon::Msg;
 
@@ -106,24 +105,23 @@ impl Ticker {
     }
 }
 
-/// One ticker per probe, kept in step with what the machine currently wants.
+/// One ticker per module, kept in step with what the machine currently wants.
 pub struct Scheduler {
-    tickers: BTreeMap<Probe, Arc<Ticker>>,
+    tickers: BTreeMap<ModuleId, Arc<Ticker>>,
 }
 
 impl Scheduler {
-    /// Start a thread per probe. Each asks the machine for a sample, so probing
-    /// stays a normal event round-trip rather than a side channel.
+    /// Start a thread per module. Each says "you are due" and nothing more, so
+    /// sampling stays a normal event round-trip rather than a side channel.
     pub fn start(events: Sender<Msg>) -> Scheduler {
         let mut tickers = BTreeMap::new();
-        for probe in Probe::ALL {
+        for id in ModuleId::ALL {
             let ticker = Arc::new(Ticker::new(0));
-            tickers.insert(probe, Arc::clone(&ticker));
+            tickers.insert(id, Arc::clone(&ticker));
             let events = events.clone();
-            spawn(&format!("tick-{}", probe.as_str()), move || loop {
+            spawn(&format!("tick-{}", id.as_str()), move || loop {
                 ticker.wait();
-                let due = Event::FromProbe(EventProbe::Due { what: probe });
-                if events.send(Msg::Ev(due)).is_err() {
+                if events.send(Msg::Ev(id.due())).is_err() {
                     return;
                 }
             });
@@ -136,7 +134,7 @@ impl Scheduler {
             std::thread::sleep(CLOCK_INTERVAL);
             let now = Millis(epoch.elapsed().as_millis() as u64);
             if events
-                .send(Msg::Ev(Event::FromClock(EventClock::Tick { now })))
+                .send(Msg::Ev(Event::Clock(EventClock::Tick { now })))
                 .is_err()
             {
                 return;
@@ -145,9 +143,9 @@ impl Scheduler {
         Scheduler { tickers }
     }
 
-    pub fn apply(&self, plan: &BTreeMap<Probe, u32>) {
-        for (probe, ticker) in &self.tickers {
-            ticker.set_interval(plan.get(probe).copied().unwrap_or(0));
+    pub fn apply(&self, plan: &BTreeMap<ModuleId, u32>) {
+        for (id, ticker) in &self.tickers {
+            ticker.set_interval(plan.get(id).copied().unwrap_or(0));
         }
     }
 

@@ -1,6 +1,21 @@
 [workspace]
 resolver = "2"
-members = ["crates/core", "crates/daemon", "crates/eval"]
+members = [
+    "crates/api-core",
+    "crates/util-exec",
+    "crates/util-eval",
+    "crates/module-wifi",
+    "crates/module-bluetooth",
+    "crates/module-audio",
+    "crates/module-backlight",
+    "crates/module-battery",
+    "crates/module-date",
+    "crates/module-theme",
+    "crates/module-dock",
+    "crates/module-shot",
+    "crates/module-bar",
+    "crates/daemon",
+]
 
 [workspace.package]
 version = "0.1.0"

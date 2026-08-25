@@ -1,31 +1,19 @@
 //! `eww-state` — the daemon that owns the desktop widgets' state, and the CLI
 //! the widgets themselves call.
 //!
-//! All the decisions live in `eww-state-core`, which does no IO. This crate is
-//! the runtime around it: it samples the world, runs commands, and pushes the
-//! result into eww.
+//! Almost nothing lives here. Each widget is its own `module-*` crate holding
+//! both its state machine and the commands that serve it; `module-bar` routes
+//! between them. What is left in this crate is the loop, the control socket,
+//! the timers, and making eww match what the machine says should be true.
 
 mod eww_cli;
 mod hypr;
 mod ipc;
 mod log;
 mod paths;
-mod probe;
-mod probe_audio;
-mod probe_backlight;
-mod probe_battery;
-mod probe_bt;
-mod probe_date;
-mod probe_dock;
-mod probe_net;
-mod probe_theme;
-mod proc;
 mod reconcile;
 mod runtime_daemon;
-mod runtime_file;
-mod runtime_probe;
-mod runtime_shell;
-mod svg;
+mod runtime_perform;
 mod ticker;
 
 use paths::Paths;

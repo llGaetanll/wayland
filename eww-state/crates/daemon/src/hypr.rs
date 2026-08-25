@@ -12,16 +12,14 @@ use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 
-use eww_state_core::Event;
-use eww_state_core::EventProbe;
-use eww_state_core::Probe;
+use module_bar::Event;
+use module_bar::EventBar;
 
-use crate::proc;
 use crate::runtime_daemon::Msg;
 
-pub fn sample() -> Option<EventProbe> {
-    let out = proc::out("hyprctl", &["activeworkspace"])?;
-    Some(EventProbe::Fullscreen {
+pub fn sample() -> Option<EventBar> {
+    let out = exec::out("hyprctl", &["activeworkspace"])?;
+    Some(EventBar::Fullscreen {
         on: parse_fullscreen(&out),
     })
 }
@@ -79,9 +77,7 @@ pub fn watch(events: Sender<Msg>) {
                         if !is_interesting(&line) {
                             continue;
                         }
-                        let due = Event::FromProbe(EventProbe::Due {
-                            what: Probe::Fullscreen,
-                        });
+                        let due = Event::Bar(EventBar::FullscreenDue);
                         if events.send(Msg::Ev(due)).is_err() {
                             return;
                         }

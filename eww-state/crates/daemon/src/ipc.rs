@@ -15,12 +15,12 @@ use std::sync::mpsc::channel;
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 
-use eww_state_core::Event;
-use eww_state_core::EventProbe;
-use eww_state_core::EventUi;
-use eww_state_core::MenuId;
-use eww_state_core::Probe;
-use eww_state_core::ShotAction;
+use module_bar::Event;
+use module_bar::EventBar;
+use module_bar::MenuId;
+use module_bar::ModuleId;
+use module_shot::EventShot;
+use module_shot::ShotAction;
 
 use crate::paths::Paths;
 use crate::runtime_daemon::Msg;
@@ -54,49 +54,57 @@ pub fn parse(args: &[&str]) -> Result<Cmd, String> {
         ["dump"] => Ok(Cmd::Query(Query::Dump)),
 
         ["menu", "toggle", name] => MenuId::parse(name)
-            .map(|menu| ui(EventUi::MenuToggled { menu }))
+            .map(|menu| ev(Event::Bar(EventBar::MenuToggled { menu })))
             .ok_or_else(|| format!("unknown menu: {name}")),
-        ["menu", "close"] => Ok(ui(EventUi::MenuDismissed)),
+        ["menu", "close"] => Ok(ev(Event::Bar(EventBar::MenuDismissed))),
 
-        ["volume", "set", v] => num(v).map(|percent| ui(EventUi::VolumeSet { percent })),
-        ["brightness", "set", v] => num(v).map(|percent| ui(EventUi::BrightnessSet { percent })),
+        ["volume", "set", v] => {
+            num(v).map(|percent| ev(Event::Audio(module_audio::EventAudio::Set { percent })))
+        }
+        ["brightness", "set", v] => num(v).map(|percent| {
+            ev(Event::Backlight(module_backlight::EventBacklight::Set {
+                percent,
+            }))
+        }),
 
-        ["wifi", "toggle"] => Ok(ui(EventUi::WifiToggled)),
-        ["wifi", "rescan"] => Ok(due(Probe::Net)),
-        ["wifi", "connect", ssid_b64] => Ok(ui(EventUi::WifiPicked {
+        ["wifi", "toggle"] => Ok(ev(Event::Wifi(module_wifi::EventWifi::Toggled))),
+        ["wifi", "rescan"] => Ok(ev(ModuleId::Wifi.due())),
+        ["wifi", "connect", ssid_b64] => Ok(ev(Event::Wifi(module_wifi::EventWifi::Picked {
             ssid: decode(ssid_b64)?,
-        })),
+        }))),
 
-        ["bt", "toggle"] => Ok(ui(EventUi::BtToggled)),
-        ["bt", "connect", mac_b64] => Ok(ui(EventUi::BtPicked {
-            mac: decode(mac_b64)?,
-        })),
+        ["bt", "toggle"] => Ok(ev(Event::Bluetooth(
+            module_bluetooth::EventBluetooth::Toggled,
+        ))),
+        ["bt", "connect", mac_b64] => Ok(ev(Event::Bluetooth(
+            module_bluetooth::EventBluetooth::Picked {
+                mac: decode(mac_b64)?,
+            },
+        ))),
 
-        ["dock", "launch", id] => Ok(ui(EventUi::DockLaunched { id: id.to_string() })),
-        ["dock", "swap", moved, onto] => Ok(ui(EventUi::DockDropped {
+        ["dock", "launch", id] => Ok(ev(Event::Dock(module_dock::EventDock::Launched {
+            id: id.to_string(),
+        }))),
+        ["dock", "swap", moved, onto] => Ok(ev(Event::Dock(module_dock::EventDock::Dropped {
             moved: moved.to_string(),
             onto: onto.to_string(),
-        })),
+        }))),
 
-        ["shot", "capture"] => Ok(ui(EventUi::ShotRequested)),
+        ["shot", "capture"] => Ok(ev(Event::Shot(EventShot::Requested))),
         ["shot", action] => ShotAction::parse(action)
-            .map(|action| ui(EventUi::ShotActed { action }))
+            .map(|action| ev(Event::Shot(EventShot::Acted { action })))
             .ok_or_else(|| format!("unknown shot action: {action}")),
 
-        ["refresh", probe] => Probe::parse(probe)
-            .map(due)
-            .ok_or_else(|| format!("unknown probe: {probe}")),
+        ["refresh", module] => ModuleId::parse(module)
+            .map(|id| ev(id.due()))
+            .ok_or_else(|| format!("unknown module: {module}")),
 
         _ => usage(),
     }
 }
 
-fn ui(event: EventUi) -> Cmd {
-    Cmd::Ev(Event::FromUi(event))
-}
-
-fn due(what: Probe) -> Cmd {
-    Cmd::Ev(Event::FromProbe(EventProbe::Due { what }))
+fn ev(event: Event) -> Cmd {
+    Cmd::Ev(event)
 }
 
 fn num(v: &str) -> Result<u8, String> {
@@ -223,14 +231,11 @@ pub fn request(socket: &std::path::Path, args: &[String]) -> std::io::Result<Str
 #[cfg(test)]
 mod tests {
     use super::*;
-    use Cmd::Ev;
-    use Event::FromProbe as Probed;
-    use Event::FromUi as Ui;
 
     /// Assert that a command line parses to something matching `pat`.
     ///
-    /// A pattern rather than an equality check, because `Event` deliberately
-    /// carries no `PartialEq` — see the rules in docs/STATE_MACHINES.md.
+    /// A pattern rather than an equality check, because an event deliberately
+    /// carries no `PartialEq` — see docs/STATE_MACHINES.md.
     macro_rules! parses {
         ($args:expr, $pat:pat $(if $guard:expr)?) => {
             let parsed = parse(&$args).expect("should parse");
@@ -247,9 +252,12 @@ mod tests {
     fn menu_commands() {
         parses!(
             ["menu", "toggle", "wifi"],
-            Ev(Ui(EventUi::MenuToggled { menu: MenuId::Wifi }))
+            Cmd::Ev(Event::Bar(EventBar::MenuToggled { menu: MenuId::Wifi }))
         );
-        parses!(["menu", "close"], Ev(Ui(EventUi::MenuDismissed)));
+        parses!(
+            ["menu", "close"],
+            Cmd::Ev(Event::Bar(EventBar::MenuDismissed))
+        );
         assert!(parse(&["menu", "toggle", "nope"]).is_err());
     }
 
@@ -257,11 +265,11 @@ mod tests {
     fn slider_values_may_be_floats() {
         parses!(
             ["volume", "set", "42"],
-            Ev(Ui(EventUi::VolumeSet { percent: 42 }))
+            Cmd::Ev(Event::Audio(module_audio::EventAudio::Set { percent: 42 }))
         );
         parses!(
             ["volume", "set", "42.0"],
-            Ev(Ui(EventUi::VolumeSet { percent: 42 }))
+            Cmd::Ev(Event::Audio(module_audio::EventAudio::Set { percent: 42 }))
         );
         assert!(parse(&["volume", "set", "loud"]).is_err());
     }
@@ -271,7 +279,8 @@ mod tests {
         // "my:net" — a raw SSID could carry anything, including a quote.
         parses!(
             ["wifi", "connect", "bXk6bmV0"],
-            Ev(Ui(EventUi::WifiPicked { ref ssid })) if ssid == "my:net"
+            Cmd::Ev(Event::Wifi(module_wifi::EventWifi::Picked { ref ssid }))
+                if ssid == "my:net"
         );
         assert!(parse(&["wifi", "connect", "not base64!"]).is_err());
     }
@@ -279,38 +288,43 @@ mod tests {
     #[test]
     fn base64_roundtrips_with_the_encoder_widgets_use() {
         for s in ["", "a", "ab", "abc", "Café ✳", "AA:BB:CC:DD:EE:FF"] {
-            let encoded = eww_state_core::util::b64(s);
+            let encoded = api::util::b64(s);
             assert_eq!(decode(&encoded).expect("valid base64"), s, "roundtrip {s}");
         }
     }
 
     #[test]
     fn shot_commands() {
-        parses!(["shot", "capture"], Ev(Ui(EventUi::ShotRequested)));
+        parses!(
+            ["shot", "capture"],
+            Cmd::Ev(Event::Shot(EventShot::Requested))
+        );
         parses!(
             ["shot", "copy"],
-            Ev(Ui(EventUi::ShotActed {
+            Cmd::Ev(Event::Shot(EventShot::Acted {
                 action: ShotAction::Copy
             }))
         );
         parses!(
             ["shot", "close"],
-            Ev(Ui(EventUi::ShotActed {
+            Cmd::Ev(Event::Shot(EventShot::Acted {
                 action: ShotAction::Dismiss
             }))
         );
         assert!(parse(&["shot", "eat"]).is_err());
     }
 
+    /// A rescan is not its own command: it is the same "you are due" the timer
+    /// sends, which is why the module cannot tell the two apart.
     #[test]
-    fn a_rescan_is_a_probe_falling_due() {
+    fn a_rescan_is_a_module_falling_due() {
         parses!(
             ["wifi", "rescan"],
-            Ev(Probed(EventProbe::Due { what: Probe::Net }))
+            Cmd::Ev(Event::Wifi(module_wifi::EventWifi::Due))
         );
         parses!(
             ["refresh", "bt"],
-            Ev(Probed(EventProbe::Due { what: Probe::Bt }))
+            Cmd::Ev(Event::Bluetooth(module_bluetooth::EventBluetooth::Due))
         );
         assert!(parse(&["refresh", "nope"]).is_err());
     }
