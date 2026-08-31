@@ -15,11 +15,13 @@ use module_audio::Audio;
 use module_audio::EventAudio;
 use module_backlight::EventBacklight;
 use module_bar::Action;
+use module_bar::ActionBar;
 use module_bar::ConfigBar;
 use module_bar::Event;
 use module_bar::EventBar;
 use module_bar::EventClock;
 use module_bar::MenuId;
+use module_bar::ServerId;
 use module_bar::StateBar;
 use module_battery::Battery;
 use module_battery::EventBattery;
@@ -30,6 +32,13 @@ use module_dock::DockApp;
 use module_dock::EventDock;
 use module_shot::EventShot;
 use module_shot::Shot;
+use module_spaces::ActionSpaces;
+use module_spaces::Client;
+use module_spaces::EventSpaces;
+use module_spaces::MoveTarget;
+use module_spaces::Snapshot;
+use module_spaces::WindowAddr;
+use module_spaces::WorkspaceId;
 use module_theme::EventTheme;
 use module_theme::Theme;
 use module_wifi::EventWifi;
@@ -46,7 +55,23 @@ pub struct World {
     pub net: NetSnapshot,
     pub bt: BtSnapshot,
     pub dock: Vec<DockApp>,
-    pub fullscreen: bool,
+    /// Dock ids the fake compositor has a window for, so a test can say which
+    /// tiles should be wearing the running dot.
+    pub dock_running: Vec<String>,
+    /// The eww server the probe would find, if there is one. A takeover is this
+    /// changing without ever being `None` in between, which is the shape of the
+    /// real failure.
+    eww: Option<ServerId>,
+    /// Ids handed out so far, so a restarted server is never mistaken for the
+    /// one it replaced.
+    eww_started: u64,
+    /// Whether asking for a server produces one. False is a start that failed,
+    /// which is the only way to watch what the machine does with a run of
+    /// observations that find nothing.
+    pub eww_starts: bool,
+    /// The compositor's windows, and which workspace is being looked at.
+    clients: Vec<Client>,
+    focused: WorkspaceId,
 
     /// Joining a network fails until this is cleared.
     pub wifi_fails: bool,
@@ -71,7 +96,12 @@ impl World {
             net: NetSnapshot::default(),
             bt: BtSnapshot::default(),
             dock: Vec::new(),
-            fullscreen: false,
+            dock_running: Vec::new(),
+            eww: Some(ServerId::new(1)),
+            eww_started: 1,
+            eww_starts: true,
+            clients: Vec::new(),
+            focused: WorkspaceId(1),
             wifi_fails: false,
             held: Vec::new(),
             hold: false,
@@ -89,6 +119,27 @@ impl World {
         self.bar.emit_actions(&mut queue);
         self.drain(queue);
         self
+    }
+
+    /// What the probe sees now, sent in as the probe's own event.
+    pub fn eww_seen(&mut self) -> &mut World {
+        let server = self.eww;
+        self.feed(&[Event::Bar(EventBar::EwwObserved { server })])
+    }
+
+    /// A client that could not connect forked itself into a server and rebound
+    /// the socket. Nothing died: there was a server before and there is one
+    /// after, and it is a different one.
+    pub fn eww_taken_over(&mut self) -> &mut World {
+        self.eww_started += 1;
+        self.eww = Some(ServerId::new(self.eww_started));
+        self.eww_seen()
+    }
+
+    /// Nothing listening at all.
+    pub fn eww_gone(&mut self) -> &mut World {
+        self.eww = None;
+        self.eww_seen()
     }
 
     pub fn menu(&mut self, menu: MenuId) -> &mut World {
@@ -143,9 +194,7 @@ impl World {
     fn perform(&mut self, action: Action) -> Vec<Event> {
         self.log.push(describe(&action));
         match action {
-            Action::SampleFullscreen => vec![Event::Bar(EventBar::Fullscreen {
-                on: self.fullscreen,
-            })],
+            Action::Spaces(a) => self.spaces(a),
             Action::Audio(a) => self.audio(a),
             Action::Backlight(a) => self.backlight(a),
             Action::Battery(a) => self.battery(a),
@@ -157,7 +206,120 @@ impl World {
             Action::Shot(a) => self.shot(a),
             Action::Theme(_) => vec![Event::Theme(EventTheme::Observed { theme: Theme::Dark })],
             Action::Wifi(a) => self.wifi(a),
+            Action::Bar(a) => self.eww_action(a),
         }
+    }
+
+    /// eww's half: starting a server puts a new one behind the socket, and the
+    /// probe that follows is what tells the machine it is there.
+    fn eww_action(&mut self, action: ActionBar) -> Vec<Event> {
+        match action {
+            ActionBar::EwwStart if self.eww_starts => {
+                self.eww_started += 1;
+                self.eww = Some(ServerId::new(self.eww_started));
+                vec![Event::Bar(EventBar::EwwObserved { server: self.eww })]
+            }
+            ActionBar::EwwStart => Vec::new(),
+            ActionBar::EwwAdopt { .. } => Vec::new(),
+        }
+    }
+
+    /// The compositor's half of a Space: answer a look, carry out a move, and
+    /// let the window follow it the way `follow = true` does.
+    fn spaces(&mut self, action: ActionSpaces) -> Vec<Event> {
+        match action {
+            ActionSpaces::Look { id } => {
+                let snapshot = Snapshot {
+                    focused: self.focused,
+                    active: self
+                        .clients
+                        .iter()
+                        .find(|c| c.workspace == self.focused)
+                        .map(|c| c.addr.clone()),
+                    clients: self.clients.clone(),
+                };
+                vec![
+                    Event::Spaces(EventSpaces::Sampled { id, snapshot }),
+                    Event::Spaces(EventSpaces::Finished { id }),
+                ]
+            }
+            ActionSpaces::Move { id, addr, to } => {
+                let to = match to {
+                    MoveTarget::Empty => self.empty_workspace(),
+                    MoveTarget::Workspace(w) => w,
+                };
+                for c in &mut self.clients {
+                    if c.addr == addr {
+                        c.workspace = to;
+                    }
+                }
+                self.focused = to;
+                vec![Event::Spaces(EventSpaces::Finished { id })]
+            }
+            ActionSpaces::Focus { workspace } => {
+                self.focused = workspace;
+                Vec::new()
+            }
+            ActionSpaces::Close { addr } => {
+                self.clients.retain(|c| c.addr != addr);
+                Vec::new()
+            }
+        }
+    }
+
+    /// The lowest workspace with nothing on it, which is what the compositor
+    /// hands out for `empty`.
+    fn empty_workspace(&self) -> WorkspaceId {
+        (1..)
+            .map(WorkspaceId)
+            .find(|w| !self.clients.iter().any(|c| c.workspace == *w))
+            .unwrap_or(WorkspaceId(1))
+    }
+
+    /// A window appears on the focused workspace.
+    pub fn open_window(&mut self, addr: &str) -> &mut World {
+        self.clients.push(Client {
+            addr: WindowAddr::parse(addr).expect("an address"),
+            workspace: self.focused,
+            fullscreen: false,
+            monitor: 0,
+        });
+        self.compositor_moved()
+    }
+
+    /// The user pressed fullscreen on a window, or left it.
+    pub fn set_fullscreen(&mut self, addr: &str, on: bool) -> &mut World {
+        let addr = WindowAddr::parse(addr).expect("an address");
+        for c in &mut self.clients {
+            if c.addr == addr {
+                c.fullscreen = on;
+            }
+        }
+        self.compositor_moved()
+    }
+
+    /// Which workspace the user is looking at.
+    pub fn switch_to(&mut self, workspace: i32) -> &mut World {
+        self.focused = WorkspaceId(workspace);
+        self.compositor_moved()
+    }
+
+    /// The compositor said something happened, which is all it ever says.
+    pub fn compositor_moved(&mut self) -> &mut World {
+        self.feed(&[module_bar::ModuleId::Spaces.due()])
+    }
+
+    /// Which workspace a window is on, as the fake compositor has it.
+    pub fn workspace_of(&self, addr: &str) -> Option<i32> {
+        let addr = WindowAddr::parse(addr).expect("an address");
+        self.clients
+            .iter()
+            .find(|c| c.addr == addr)
+            .map(|c| c.workspace.0)
+    }
+
+    pub fn window_count(&self) -> usize {
+        self.clients.len()
     }
 
     fn audio(&mut self, action: module_audio::ActionAudio) -> Vec<Event> {
@@ -239,6 +401,12 @@ impl World {
         match action {
             ActionDock::Sample => vec![Event::Dock(EventDock::Observed {
                 apps: self.dock.clone(),
+            })],
+            ActionDock::SampleRunning { ids } => vec![Event::Dock(EventDock::Running {
+                ids: ids
+                    .into_iter()
+                    .filter(|id| self.dock_running.contains(id))
+                    .collect(),
             })],
             ActionDock::Launch { .. } => Vec::new(),
             ActionDock::Write { apps } => {
@@ -356,9 +524,9 @@ fn describe(action: &Action) -> String {
     use module_bluetooth::ActionBluetooth as Bt;
     use module_dock::ActionDock as Dock;
     use module_shot::ActionShot as Shot;
+    use module_spaces::ActionSpaces as Spaces;
     use module_wifi::ActionWifi as Wifi;
     match action {
-        Action::SampleFullscreen => "sample fullscreen".into(),
         Action::Audio(a) => format!("audio {a:?}"),
         Action::Backlight(a) => format!("backlight {a:?}"),
         Action::Battery(a) => format!("battery {a:?}"),
@@ -378,8 +546,12 @@ fn describe(action: &Action) -> String {
         Action::Shot(Shot::Capture { .. }) => "shot-capture".into(),
         Action::Shot(Shot::Save { path }) => format!("shot-save {path}"),
         Action::Shot(a) => format!("shot {a:?}"),
+        Action::Spaces(Spaces::Look { .. }) => "look".into(),
+        Action::Spaces(a) => format!("spaces {a:?}"),
         Action::Wifi(Wifi::Notify { body }) => format!("notify {body}"),
         Action::Wifi(Wifi::Scan) => "wifi-scan".into(),
         Action::Wifi(a) => format!("wifi {a:?}"),
+        Action::Bar(ActionBar::EwwStart) => "eww-start".into(),
+        Action::Bar(ActionBar::EwwAdopt { .. }) => "eww-adopt".into(),
     }
 }

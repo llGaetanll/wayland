@@ -10,7 +10,6 @@ use common::World;
 use module_audio::Audio;
 use module_audio::EventAudio;
 use module_bar::Event;
-use module_bar::EventBar;
 use module_bar::MenuId;
 use module_bar::ModuleId;
 use module_bluetooth::BtDevice;
@@ -310,17 +309,70 @@ fn an_abandoned_selection_stops_blocking_the_key() {
 #[test]
 fn bar_and_dock_never_get_stranded_by_fullscreen() {
     let mut w = World::new();
+    w.open_window("0xa");
     assert_eq!(w.windows(), ["bar", "dock"]);
 
     for _ in 0..3 {
-        w.fullscreen = true;
-        w.feed(&[Event::Bar(EventBar::FullscreenDue)]);
+        w.set_fullscreen("0xa", true);
         assert!(w.windows().is_empty(), "both hide together");
 
-        w.fullscreen = false;
-        w.feed(&[Event::Bar(EventBar::FullscreenDue)]);
+        w.set_fullscreen("0xa", false);
         assert_eq!(w.windows(), ["bar", "dock"], "and both come back");
     }
+}
+
+/// Fullscreen is a Space of its own: the window leaves the workspace it was on
+/// and comes back to it, which is what the bar hiding is really following.
+#[test]
+fn a_fullscreen_window_gets_a_space_and_gives_it_back() {
+    let mut w = World::new();
+    w.open_window("0xa");
+    w.open_window("0xb");
+    assert_eq!(w.workspace_of("0xa"), Some(1));
+
+    w.set_fullscreen("0xa", true);
+    let space = w.workspace_of("0xa").expect("still open");
+    assert_ne!(space, 1, "it moved off the workspace it shared");
+    assert_eq!(w.workspace_of("0xb"), Some(1), "and left the other alone");
+    assert!(w.windows().is_empty(), "the bar is out of the way");
+
+    w.set_fullscreen("0xa", false);
+    assert_eq!(w.workspace_of("0xa"), Some(1), "back where it came from");
+    assert_eq!(w.windows(), ["bar", "dock"]);
+}
+
+/// The compositor re-emits fullscreen while a window is being moved, and that
+/// echo used to bounce the window between workspaces forever. The world here
+/// settles every action before returning, so a bounce would never terminate.
+#[test]
+fn a_window_in_a_space_stays_put_however_much_the_compositor_talks() {
+    let mut w = World::new();
+    w.open_window("0xa");
+    w.set_fullscreen("0xa", true);
+    let space = w.workspace_of("0xa");
+
+    for _ in 0..5 {
+        w.compositor_moved();
+    }
+    assert_eq!(w.workspace_of("0xa"), space, "nothing moved it again");
+    assert!(w.windows().is_empty(), "and the bar stayed out of the way");
+}
+
+/// Closing inside a Space has to leave it first: a Space emptied while it is
+/// still focused lingers instead of being destroyed.
+#[test]
+fn closing_a_window_inside_a_space_comes_home_first() {
+    let mut w = World::new();
+    w.open_window("0xa");
+    w.open_window("0xb");
+    w.set_fullscreen("0xb", true);
+
+    w.feed(&[Event::Spaces(module_spaces::EventSpaces::CloseRequested)]);
+    assert_eq!(w.window_count(), 1, "the fullscreen window is gone");
+    assert_eq!(w.workspace_of("0xa"), Some(1), "the other one is untouched");
+
+    w.compositor_moved();
+    assert_eq!(w.windows(), ["bar", "dock"], "and the bar is back");
 }
 
 /// Opening a menu should cost a refresh; leaving it open should cost the faster
@@ -352,6 +404,52 @@ fn state_survives_an_eww_restart() {
     w.menu(MenuId::Wifi);
     let before = (w.var("wifi"), w.windows());
 
-    w.feed(&[Event::Bar(EventBar::EwwRestarted)]);
+    w.eww_taken_over();
     assert_eq!((w.var("wifi"), w.windows()), before);
+}
+
+/// The bug this whole thing exists for. An eww client that cannot connect forks
+/// itself into a second server and rebinds the socket, so the first is left
+/// alive with the bar and dock still on screen and nothing able to reach them.
+/// Something is listening before and after, which is why watching liveness saw
+/// nothing: three servers stacked up over three days without one warning.
+#[test]
+fn an_eww_server_that_replaced_another_is_adopted() {
+    let mut w = World::new();
+    w.eww_seen();
+    w.eww_seen();
+    assert_eq!(
+        w.counts().get("eww-adopt"),
+        Some(&1),
+        "the same server twice is still the one server we published to"
+    );
+
+    w.eww_taken_over();
+    assert_eq!(
+        w.counts().get("eww-adopt"),
+        Some(&2),
+        "a server we have not published to must be told everything"
+    );
+}
+
+/// Nothing listening is asked for once, not once per probe: a second start
+/// while the first server is still coming up is how two of them appear.
+#[test]
+fn a_missing_eww_server_is_started_once() {
+    let mut w = World::new();
+    w.eww_starts = false;
+    w.eww_gone();
+    w.eww_seen();
+    w.eww_seen();
+    assert_eq!(
+        w.counts().get("eww-start"),
+        Some(&1),
+        "a server still coming up must not be raced by a second one"
+    );
+
+    // A start can fail quietly, so the ask is not abandoned — only held off.
+    w.eww_starts = true;
+    w.wait(Millis::secs(10));
+    assert_eq!(w.counts().get("eww-start"), Some(&2));
+    assert_eq!(w.counts().get("eww-adopt"), Some(&1));
 }

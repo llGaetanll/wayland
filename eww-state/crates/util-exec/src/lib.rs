@@ -3,6 +3,10 @@
 //! Every module that talks to the outside world does it through here, so what
 //! happens to a command's output is decided once: trimmed, and a failure is
 //! indistinguishable from no output, because every caller treats them alike.
+//!
+//! What a command says on stderr is logged rather than discarded. Throwing it
+//! away costs nothing until something goes wrong, and then it is the one line
+//! that would have said why.
 
 use std::io;
 use std::process::Command;
@@ -11,12 +15,18 @@ use std::process::Stdio;
 /// Run a command and return its stdout, trimmed. `None` if it could not be run
 /// or exited non-zero — every caller treats those the same way.
 pub fn out(program: &str, args: &[&str]) -> Option<String> {
-    let o = Command::new(program)
+    let o = match Command::new(program)
         .args(args)
         .stdin(Stdio::null())
-        .stderr(Stdio::null())
         .output()
-        .ok()?;
+    {
+        Ok(o) => o,
+        Err(e) => {
+            tracing::warn!(program, ?args, error = %e, "could not run");
+            return None;
+        }
+    };
+    log_stderr(program, args, &o.stderr);
     if !o.status.success() {
         return None;
     }
@@ -25,14 +35,21 @@ pub fn out(program: &str, args: &[&str]) -> Option<String> {
 
 /// Run a command for its effect. Returns whether it succeeded.
 pub fn ok(program: &str, args: &[&str]) -> bool {
-    Command::new(program)
+    match Command::new(program)
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
+        .output()
+    {
+        Ok(o) => {
+            log_stderr(program, args, &o.stderr);
+            o.status.success()
+        }
+        Err(e) => {
+            tracing::warn!(program, ?args, error = %e, "could not run");
+            false
+        }
+    }
 }
 
 /// Feed `input` to a command's stdin, for putting bytes on the clipboard.
@@ -56,4 +73,16 @@ pub fn detach(cmd: &str) {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status();
+}
+
+/// Say what a command said on stderr, whether or not it went on to succeed.
+///
+/// Exit status is not the whole story: an eww client that cannot reach a server
+/// starts one, says so here, and still exits zero.
+fn log_stderr(program: &str, args: &[&str], stderr: &[u8]) {
+    let said = String::from_utf8_lossy(stderr);
+    let said = said.trim();
+    if !said.is_empty() {
+        tracing::warn!(program, ?args, stderr = said, "command wrote to stderr");
+    }
 }

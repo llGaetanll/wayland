@@ -18,6 +18,7 @@ use std::time::Duration;
 
 use api::WireVars;
 use module_bar::Action;
+use module_bar::ActionBar;
 use module_bar::ConfigBar;
 use module_bar::Event;
 use module_bar::EventBar;
@@ -44,7 +45,7 @@ pub enum Msg {
     },
 }
 
-const EWW_HEALTH_INTERVAL: Duration = Duration::from_secs(5);
+const EWW_PROBE_INTERVAL: Duration = Duration::from_secs(5);
 
 pub struct RuntimeDaemon {
     places: Places,
@@ -79,12 +80,14 @@ impl RuntimeDaemon {
             ),
             events: adapt(tx.clone()),
         });
-        watch_eww(&paths, tx.clone());
+        probe_eww(&paths, tx.clone());
 
-        let mut eww = EwwCli::new(paths.eww_config.clone());
-        eww.ensure_daemon();
+        // No bootstrap here any more: starting a server and adopting it are the
+        // same two decisions as recovering from one being replaced, and they
+        // are the machine's to make. The first observation arrives before the
+        // probe's first sleep, so startup takes the ordinary path.
+        let mut eww = EwwCli::new(paths.eww_config.clone(), paths.run_dir.clone());
         let mut reconciler = Reconciler::new();
-        reconciler.reset(&mut eww);
 
         tracing::info!(commit = crate::log::COMMIT, "daemon started");
         // Populate everything before the first interval elapses.
@@ -99,15 +102,6 @@ impl RuntimeDaemon {
             if !events.is_empty() {
                 turn += 1;
 
-                if events
-                    .iter()
-                    .any(|e| matches!(e, Event::Bar(EventBar::EwwRestarted)))
-                {
-                    tracing::warn!("eww went away; republishing");
-                    eww.ensure_daemon();
-                    reconciler.forget();
-                }
-
                 // Every event lands before the machine is asked for anything:
                 // a batch is one situation, and what it adds up to is only
                 // knowable once all of it has been seen.
@@ -115,6 +109,15 @@ impl RuntimeDaemon {
                 let mut actions = Vec::new();
                 state.emit_actions(&mut actions);
                 log_turn(turn, &events, &actions);
+
+                // The bar's own actions are carried out here rather than on a
+                // thread with the rest: they are about eww and the reconciler,
+                // and both live on this one.
+                for action in &actions {
+                    if let Action::Bar(a) = action {
+                        perform_action_bar(a, &mut eww, &mut reconciler);
+                    }
+                }
 
                 // Content first, then windows: a panel never appears showing
                 // what it looked like last time it was open.
@@ -224,28 +227,55 @@ fn adapt(tx: Sender<Msg>) -> Sender<Event> {
     ev_tx
 }
 
-/// Notice an eww daemon that died or was reloaded, so its state can be pushed
-/// again. Without this the bar would come back empty and stay that way.
-fn watch_eww(paths: &Paths, tx: Sender<Msg>) {
-    let eww = EwwCli::new(paths.eww_config.clone());
-    let spawned = std::thread::Builder::new()
-        .name("eww-health".into())
-        .spawn(move || {
-            let mut was_alive = true;
-            loop {
-                std::thread::sleep(EWW_HEALTH_INTERVAL);
-                let alive = eww.alive();
-                // Only on the transition: a dead eww shouldn't produce a reset
-                // event every five seconds.
-                let restarted = Event::Bar(EventBar::EwwRestarted);
-                if alive && !was_alive && tx.send(Msg::Ev(restarted)).is_err() {
-                    return;
-                }
-                was_alive = alive;
+/// Carry out what the bar asked of eww.
+///
+/// Both of these are recovery, and neither decides anything: whether a server
+/// has to be started, and whether the one answering is a stranger, were settled
+/// by the machine before this was called.
+fn perform_action_bar(action: &ActionBar, eww: &mut EwwCli, reconciler: &mut Reconciler) {
+    match action {
+        ActionBar::EwwStart => {
+            tracing::warn!("nothing listening at eww's socket; starting a server");
+            if !eww.start() {
+                tracing::error!("could not start an eww server");
             }
+        }
+        ActionBar::EwwAdopt { server } => {
+            tracing::warn!(
+                ?server,
+                "publishing to an eww server we have not used before"
+            );
+            // close-all before anything is published: a server we did not open
+            // these on may still be holding windows from whoever did.
+            reconciler.reset(eww);
+        }
+    }
+}
+
+/// Report what is listening at eww's socket, over and over.
+///
+/// The thread holds nothing and concludes nothing — it says what it saw and the
+/// machine decides what that means. It used to keep a `was_alive` of its own
+/// and decide "eww restarted" from it, which could not see the failure that
+/// actually happens: a client forking itself into a second server reads as
+/// alive both before and after, so three servers accumulated over three days
+/// without this ever firing once.
+fn probe_eww(paths: &Paths, tx: Sender<Msg>) {
+    let eww = EwwCli::new(paths.eww_config.clone(), paths.run_dir.clone());
+    let spawned = std::thread::Builder::new()
+        .name("eww-probe".into())
+        .spawn(move || loop {
+            let server = eww.probe();
+            if tx
+                .send(Msg::Ev(Event::Bar(EventBar::EwwObserved { server })))
+                .is_err()
+            {
+                return;
+            }
+            std::thread::sleep(EWW_PROBE_INTERVAL);
         });
     if let Err(e) = spawned {
-        tracing::error!(error = %e, "could not watch eww's health");
+        tracing::error!(error = %e, "could not probe eww");
     }
 }
 

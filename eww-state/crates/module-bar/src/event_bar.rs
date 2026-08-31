@@ -1,9 +1,10 @@
 //! What the bar itself is told, as opposed to what a module is told.
 //!
-//! These are the facts no single widget owns: which dropdown the user asked
-//! for, and whether a fullscreen Space is focused.
+//! Two facts, and they are the ones no single widget can own: which dropdown
+//! the user asked for, and which eww is on the other end of the wire.
 
 use crate::menu::MenuId;
+use crate::server_id::ServerId;
 
 #[derive(Debug)]
 pub enum EventBar {
@@ -12,15 +13,9 @@ pub enum EventBar {
         menu: MenuId,
     },
     MenuDismissed,
-    /// A fullscreen re-check is due, because the compositor said something that
-    /// could have changed the answer.
-    FullscreenDue,
-    /// The focused workspace holds a fullscreen window, so bar and dock hide.
-    Fullscreen {
-        on: bool,
+    /// What the last probe found at eww's socket: a server, or nothing there.
+    /// The runtime reports; what it means is decided here.
+    EwwObserved {
+        server: Option<ServerId>,
     },
-    /// eww came back after a restart. Nothing changes here: the runtime
-    /// republishes from the state we already hold, which is what recovery
-    /// needs.
-    EwwRestarted,
 }

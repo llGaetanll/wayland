@@ -8,7 +8,6 @@ use bar::Action;
 use bar::Event;
 use module_bar as bar;
 
-use crate::hypr;
 use crate::paths::Paths;
 
 /// The bits of the environment a module's IO needs and cannot discover.
@@ -49,7 +48,9 @@ impl Places {
 /// Carry one action out, and hand back whatever it has to say.
 pub fn perform(action: &Action, places: &Places) -> Vec<Event> {
     match action {
-        Action::SampleFullscreen => hypr::sample().into_iter().map(Event::Bar).collect(),
+        // Carried out by the event loop instead: these are about eww and the
+        // reconciler, which it owns.
+        Action::Bar(_) => Vec::new(),
         Action::Audio(a) => module_audio::perform::perform(a)
             .into_iter()
             .map(Event::Audio)
@@ -77,6 +78,10 @@ pub fn perform(action: &Action, places: &Places) -> Vec<Event> {
         Action::Shot(a) => module_shot::perform::perform(a, &places.shot)
             .into_iter()
             .map(Event::Shot)
+            .collect(),
+        Action::Spaces(a) => module_spaces::perform::perform(a)
+            .into_iter()
+            .map(Event::Spaces)
             .collect(),
         Action::Theme(a) => module_theme::perform::perform(a)
             .into_iter()

@@ -1,7 +1,7 @@
 //! The root state machine.
 //!
 //! The bar owns the modules and the two facts none of them can own alone: which
-//! dropdown is open, and whether a fullscreen Space is focused. The first lives
+//! dropdown is open, and which eww server we are talking to. The first lives
 //! here as a single `Option<MenuId>` — not a boolean per menu — so "two menus
 //! open at once" is not a state that exists.
 //!
@@ -26,12 +26,15 @@ use module_date::StateDate;
 use module_dock::StateDock;
 use module_shot::EventShot;
 use module_shot::StateShot;
+use module_spaces::StateSpaces;
 use module_theme::StateTheme;
+use module_theme::Theme;
 use module_wifi::EventWifi;
 use module_wifi::ReqWifi;
 use module_wifi::StateWifi;
 
 use crate::action::Action;
+use crate::action_bar::ActionBar;
 use crate::config::ConfigBar;
 use crate::event::Event;
 use crate::event_bar::EventBar;
@@ -39,22 +42,36 @@ use crate::event_clock::EventClock;
 use crate::menu::MenuId;
 use crate::module_id::ModuleId;
 use crate::module_id::PollPlan;
+use crate::server_id::ServerId;
 use crate::window::Window;
 
 /// Granting a module's request can make another module speak, whose request can
 /// in turn... Bounded so a mistake cannot spin forever.
 const MAX_EMIT_ROUNDS: usize = 8;
 
+/// How long a server we asked for has to appear before we ask again.
+///
+/// Both ends of this matter. Asking again too soon races a server that is still
+/// coming up, and a second server is the failure this whole path exists to
+/// prevent. Never asking again leaves an empty screen for the rest of the
+/// session when a start quietly fails.
+const EWW_START_AGAIN: Millis = Millis(10_000);
+
 #[derive(Default)]
 pub struct StateBar {
     /// Which dropdown is open. The whole point of the type.
     menu: Option<MenuId>,
-    /// The focused workspace holds a fullscreen window, so bar and dock hide.
-    fullscreen: bool,
-    /// A fullscreen re-check the batch asked for, collapsed: a burst of
-    /// compositor events is one question.
-    fullscreen_due: bool,
     now: Millis,
+    /// The eww server the last probe saw, and the one we have already published
+    /// to. Two fields and not one, because the difference between them is the
+    /// action: a server we have seen but not adopted is one that knows nothing
+    /// about us yet, whether it has just started or has just replaced another.
+    eww_seen: Option<ServerId>,
+    eww_adopted: Option<ServerId>,
+    /// When we last asked for a server, so a run of empty observations asks
+    /// once rather than once every probe: asking twice is how a second server
+    /// gets started while the first is still coming up.
+    eww_started: Option<Millis>,
 
     audio: StateAudio,
     backlight: StateBacklight,
@@ -63,8 +80,15 @@ pub struct StateBar {
     date: StateDate,
     dock: StateDock,
     shot: StateShot,
+    spaces: StateSpaces,
     theme: StateTheme,
     wifi: StateWifi,
+    /// Where the two icon sets live, and which one the modules are currently
+    /// pointed at. macOS draws its menu bar glyphs white in dark appearance and
+    /// black in light, and the glyphs here are one colour baked into the file,
+    /// so following the theme means swapping directories.
+    icons_root: String,
+    icons_theme: Option<Theme>,
 }
 
 impl StateBar {
@@ -79,8 +103,28 @@ impl StateBar {
             shot: StateShot::new(cfg.shot),
             theme: StateTheme::new(cfg.theme),
             wifi: StateWifi::new(cfg.wifi),
+            icons_root: cfg.icons_root,
             ..StateBar::default()
         }
+    }
+
+    /// Point every glyph-drawing module at the icon set for the current
+    /// appearance. Idempotent, and does nothing until the theme actually
+    /// changes, so it is safe to call after every batch.
+    fn follow_theme(&mut self) {
+        let mode = self.theme.mode();
+        if self.icons_theme == Some(mode) {
+            return;
+        }
+        self.icons_theme = Some(mode);
+        let dir = format!("{}/{}", self.icons_root, mode.as_str());
+        self.audio.set_icons_dir(&dir);
+        self.backlight.set_icons_dir(&dir);
+        self.bluetooth.set_icons_dir(&dir);
+        self.wifi.set_icons_dir(&dir);
+        // The battery glyph is generated rather than picked off disk, so it is
+        // told the appearance instead of a directory.
+        self.battery.set_dark(mode == Theme::Dark);
     }
 
     /// Apply a batch of events. This is the only way state changes, and it
@@ -89,10 +133,12 @@ impl StateBar {
         for event in events {
             self.handle_event(event);
         }
+        self.follow_theme();
     }
 
     /// Say what has to happen now, given everything the batch left behind.
     pub fn emit_actions(&mut self, actions: &mut Vec<Action>) {
+        self.emit_eww(actions);
         for _ in 0..MAX_EMIT_ROUNDS {
             let reqs = self.emit_round(actions);
             if reqs.is_empty() {
@@ -125,6 +171,10 @@ impl StateBar {
         &self.dock
     }
 
+    pub fn spaces(&self) -> &StateSpaces {
+        &self.spaces
+    }
+
     pub fn date(&self) -> &StateDate {
         &self.date
     }
@@ -155,7 +205,9 @@ impl StateBar {
     /// each script opened its own.
     pub fn windows(&self) -> BTreeSet<Window> {
         let mut w = BTreeSet::new();
-        if !self.fullscreen {
+        // A fullscreen Space is the compositor's business, so the module that
+        // owns Spaces is asked rather than a copy of the answer kept here.
+        if !self.spaces.fullscreen() {
             w.insert(Window::Bar);
             w.insert(Window::Dock);
         }
@@ -184,9 +236,9 @@ impl StateBar {
         want(ModuleId::Bluetooth, self.bluetooth.poll_interval());
         want(ModuleId::Date, self.date.poll_interval());
         want(ModuleId::Dock, self.dock.poll_interval());
+        want(ModuleId::Spaces, self.spaces.poll_interval());
         want(ModuleId::Theme, self.theme.poll_interval());
         want(ModuleId::Wifi, self.wifi.poll_interval());
-        // Fullscreen is event-driven off the compositor, never on a timer.
         p
     }
 
@@ -201,6 +253,7 @@ impl StateBar {
             Event::Date(e) => self.date.handle_event(e),
             Event::Dock(e) => self.dock.handle_event(e),
             Event::Shot(e) => self.shot.handle_event(e),
+            Event::Spaces(e) => self.spaces.handle_event(e),
             Event::Theme(e) => self.theme.handle_event(e),
             Event::Wifi(e) => self.wifi.handle_event(e),
         }
@@ -216,9 +269,7 @@ impl StateBar {
                 }
             }
             EventBar::MenuDismissed => self.close_menu(),
-            EventBar::FullscreenDue => self.fullscreen_due = true,
-            EventBar::Fullscreen { on } => self.fullscreen = *on,
-            EventBar::EwwRestarted => {}
+            EventBar::EwwObserved { server } => self.eww_seen = *server,
         }
     }
 
@@ -235,11 +286,38 @@ impl StateBar {
         self.shot.handle_event(&EventShot::Tick { now: *now });
     }
 
+    /// Keep who we are publishing to and who is actually listening in step.
+    ///
+    /// An eww client that cannot connect forks itself into a server rather than
+    /// failing, and that server rebinds the socket — so the one we are talking
+    /// to can be replaced without anything dying and without anything asking
+    /// us. A server we have not adopted holds none of our variables and none of
+    /// our windows, so it is told everything again.
+    fn emit_eww(&mut self, actions: &mut Vec<Action>) {
+        match self.eww_seen {
+            None => {
+                self.eww_adopted = None;
+                let due = match self.eww_started {
+                    None => true,
+                    Some(asked) => self.now.since(asked) >= EWW_START_AGAIN,
+                };
+                if due {
+                    self.eww_started = Some(self.now);
+                    actions.push(Action::Bar(ActionBar::EwwStart));
+                }
+            }
+            Some(server) => {
+                self.eww_started = None;
+                if self.eww_adopted != Some(server) {
+                    self.eww_adopted = Some(server);
+                    actions.push(Action::Bar(ActionBar::EwwAdopt { server }));
+                }
+            }
+        }
+    }
+
     /// One pass over every module, collecting what each asks of the bar.
     fn emit_round(&mut self, actions: &mut Vec<Action>) -> Vec<ReqWifi> {
-        if std::mem::take(&mut self.fullscreen_due) {
-            actions.push(Action::SampleFullscreen);
-        }
         let mut reqs = Vec::new();
         // Each module fills its own buffer, and the bar re-labels it on the way
         // out. That one line is the whole cost of a module not knowing there is
@@ -259,6 +337,7 @@ impl StateBar {
         emit!(date, Action::Date);
         emit!(dock, Action::Dock);
         emit!(shot, Action::Shot);
+        emit!(spaces, Action::Spaces);
         emit!(theme, Action::Theme);
         reqs.extend(emit!(wifi, Action::Wifi));
         reqs

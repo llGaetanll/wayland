@@ -10,6 +10,8 @@ pub struct Paths {
     pub cache: PathBuf,
     /// Our control socket; the CLI connects here.
     pub socket: PathBuf,
+    /// The runtime directory, which is also where eww puts its own socket.
+    pub run_dir: PathBuf,
     /// Dock contents and order, one app per line.
     pub dock_conf: PathBuf,
     /// Staging area for captured screenshots.
@@ -40,6 +42,7 @@ impl Paths {
             icons: config.join("eww/icons"),
             cache: cache.join("eww"),
             socket: run.join("eww-state.sock"),
+            run_dir: run.clone(),
             dock_conf: config.join("eww-state/dock.conf"),
             shots: run.join("eww-shots"),
             screenshots: home.join("Pictures/Screenshots"),
