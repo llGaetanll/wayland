@@ -11,6 +11,7 @@ use module_bluetooth::EventBluetooth;
 use module_date::EventDate;
 use module_dock::EventDock;
 use module_shot::EventShot;
+use module_spaces::EventSpaces;
 use module_theme::EventTheme;
 use module_wifi::EventWifi;
 
@@ -29,6 +30,7 @@ pub enum Event {
     Date(EventDate),
     Dock(EventDock),
     Shot(EventShot),
+    Spaces(EventSpaces),
     Theme(EventTheme),
     Wifi(EventWifi),
 }

@@ -32,6 +32,7 @@ eww-state — widget state daemon
   eww-state bt toggle | bt connect <mac-base64>
   eww-state dock launch <id> | dock swap <a> <b>
   eww-state shot capture | shot <copy|save|discard|close>
+  eww-state window close        close the focused window, leaving its Space first
   eww-state refresh <probe>
 
   eww-state dump | vars | windows | polls | ping

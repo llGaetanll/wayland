@@ -52,6 +52,12 @@ struct Busy {
 }
 
 impl StateBluetooth {
+    /// Follow the desktop's light/dark preference. The parent owns the theme
+    /// and hands it down; this module never asks what it is.
+    pub fn set_icons_dir(&mut self, dir: &str) {
+        self.cfg.set_icons_dir(dir);
+    }
+
     pub fn new(cfg: ConfigBluetooth) -> StateBluetooth {
         StateBluetooth {
             cfg,
@@ -245,6 +251,7 @@ impl Module for StateBluetooth {
                     ("mac", WireJson::s(&d.mac)),
                     ("mac_b64", WireJson::s(b64(&d.mac))),
                     ("connected", WireJson::Bool(d.connected)),
+                    ("icon", WireJson::s(self.cfg.device_icon(d.connected))),
                 ])
             })
             .collect();

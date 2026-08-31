@@ -21,6 +21,7 @@ use module_bar::MenuId;
 use module_bar::ModuleId;
 use module_shot::EventShot;
 use module_shot::ShotAction;
+use module_spaces::EventSpaces;
 
 use crate::paths::Paths;
 use crate::runtime_daemon::Msg;
@@ -89,6 +90,11 @@ pub fn parse(args: &[&str]) -> Result<Cmd, String> {
             moved: moved.to_string(),
             onto: onto.to_string(),
         }))),
+
+        // Closing goes through here rather than straight to the compositor:
+        // a window in a fullscreen Space has to be left behind before it is
+        // closed, and only the Spaces module knows whether it is in one.
+        ["window", "close"] => Ok(ev(Event::Spaces(EventSpaces::CloseRequested))),
 
         ["shot", "capture"] => Ok(ev(Event::Shot(EventShot::Requested))),
         ["shot", action] => ShotAction::parse(action)
@@ -327,6 +333,15 @@ mod tests {
             Cmd::Ev(Event::Bluetooth(module_bluetooth::EventBluetooth::Due))
         );
         assert!(parse(&["refresh", "nope"]).is_err());
+    }
+
+    #[test]
+    fn closing_a_window_is_the_spaces_module_s_business() {
+        parses!(
+            ["window", "close"],
+            Cmd::Ev(Event::Spaces(EventSpaces::CloseRequested))
+        );
+        assert!(parse(&["window", "open"]).is_err());
     }
 
     #[test]

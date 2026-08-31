@@ -11,11 +11,11 @@ use module_battery::EventBattery;
 use module_bluetooth::EventBluetooth;
 use module_date::EventDate;
 use module_dock::EventDock;
+use module_spaces::EventSpaces;
 use module_theme::EventTheme;
 use module_wifi::EventWifi;
 
 use crate::event::Event;
-use crate::event_bar::EventBar;
 
 /// Interval, in milliseconds, at which a module wants sampling. A module absent
 /// from the plan is never sampled on a timer.
@@ -29,11 +29,11 @@ pub enum ModuleId {
     Bluetooth,
     Date,
     Dock,
+    /// Where fullscreen windows go. Event-driven off the compositor rather
+    /// than sampled on a timer, so it is in the plan only to be asked.
+    Spaces,
     Theme,
     Wifi,
-    /// Not a module: the bar's own fullscreen check, which is event-driven off
-    /// the compositor rather than sampled on a timer.
-    Fullscreen,
 }
 
 impl ModuleId {
@@ -44,9 +44,9 @@ impl ModuleId {
         ModuleId::Bluetooth,
         ModuleId::Date,
         ModuleId::Dock,
+        ModuleId::Spaces,
         ModuleId::Theme,
         ModuleId::Wifi,
-        ModuleId::Fullscreen,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -57,9 +57,9 @@ impl ModuleId {
             ModuleId::Bluetooth => "bt",
             ModuleId::Date => "date",
             ModuleId::Dock => "dock",
+            ModuleId::Spaces => "spaces",
             ModuleId::Theme => "theme",
             ModuleId::Wifi => "wifi",
-            ModuleId::Fullscreen => "fullscreen",
         }
     }
 
@@ -77,9 +77,9 @@ impl ModuleId {
             ModuleId::Bluetooth => Event::Bluetooth(EventBluetooth::Due),
             ModuleId::Date => Event::Date(EventDate::Due),
             ModuleId::Dock => Event::Dock(EventDock::Due),
+            ModuleId::Spaces => Event::Spaces(EventSpaces::Due),
             ModuleId::Theme => Event::Theme(EventTheme::Due),
             ModuleId::Wifi => Event::Wifi(EventWifi::Due),
-            ModuleId::Fullscreen => Event::Bar(EventBar::FullscreenDue),
         }
     }
 }

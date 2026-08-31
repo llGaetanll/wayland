@@ -13,6 +13,7 @@ members = [
     "crates/module-theme",
     "crates/module-dock",
     "crates/module-shot",
+    "crates/module-spaces",
     "crates/module-bar",
     "crates/daemon",
 ]

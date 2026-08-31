@@ -9,6 +9,7 @@ use crate::probe;
 pub fn perform(action: &ActionDock, conf: &Path) -> Option<EventDock> {
     match action {
         ActionDock::Sample => Some(probe::sample(conf)),
+        ActionDock::SampleRunning { ids } => Some(probe::sample_running(ids)),
         ActionDock::Launch { cmd } => {
             exec::detach(&format!("cd ~ && {cmd}"));
             None

@@ -41,6 +41,27 @@ impl StateBattery {
         }
     }
 
+    /// Follow the desktop's light/dark preference. Redrawing is forced by
+    /// forgetting what is on disk: the path encodes the appearance, so the new
+    /// glyph lands at a new path and GTK, which caches by path, reloads it.
+    ///
+    /// `drawing` is dropped too, and that is the whole point of it. The
+    /// appearance is not part of what a render reports back, so a render that
+    /// was already in flight for the *old* appearance would otherwise be
+    /// accepted as having drawn the new one: `drawn` would be set, `icon()`
+    /// would name the new path, and the file at that path would never have been
+    /// written — the pill vanishes from the bar for the rest of the session.
+    /// Forgetting the job id makes its result unmatchable, so it is ignored.
+    pub fn set_dark(&mut self, dark: bool) {
+        if self.cfg.dark == dark {
+            return;
+        }
+        self.cfg.dark = dark;
+        self.drawn = None;
+        self.failed = None;
+        self.drawing = None;
+    }
+
     pub fn level(&self) -> Option<Battery> {
         self.level
     }
@@ -48,7 +69,7 @@ impl StateBattery {
     /// The pill's path, or nothing while there is no pill to point at.
     pub fn icon(&self) -> String {
         self.drawn
-            .map(|drawn| svg::path(&self.cfg.cache_dir, drawn))
+            .map(|drawn| svg::path(&self.cfg.cache_dir, drawn, self.cfg.dark))
             .unwrap_or_default()
     }
 }
@@ -95,7 +116,11 @@ impl Module for StateBattery {
         let drawing = self.drawing.map(|(_, battery)| battery);
         if self.drawn != Some(level) && drawing != Some(level) && self.failed != Some(level) {
             let id = self.jobs.take();
-            actions.push(ActionBattery::Render { id, battery: level });
+            actions.push(ActionBattery::Render {
+                id,
+                battery: level,
+                dark: self.cfg.dark,
+            });
             self.drawing = Some((id, level));
         }
         None
@@ -110,5 +135,54 @@ impl Module for StateBattery {
 
     fn poll_interval(&self) -> Option<u32> {
         Some(self.cfg.poll)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use api::module::drive;
+
+    use super::*;
+
+    fn level(percent: u8) -> Battery {
+        Battery {
+            percent,
+            charging: false,
+        }
+    }
+
+    /// Switching appearance mid-render must not let the old render count as the
+    /// new one. It drew the other file, and the path we publish encodes which.
+    #[test]
+    fn a_render_in_flight_does_not_survive_a_theme_change() {
+        let mut b = StateBattery::new(ConfigBattery {
+            cache_dir: "/c".to_string(),
+            dark: false,
+            ..ConfigBattery::default()
+        });
+        b.handle_event(&EventBattery::Observed { battery: level(50) });
+        let mut actions = Vec::new();
+        b.emit_actions(&mut actions);
+        let id = match actions.first() {
+            Some(ActionBattery::Render { id, .. }) => *id,
+            other => panic!("expected a render, got {other:?}"),
+        };
+
+        b.set_dark(true);
+        b.handle_event(&EventBattery::Finished { id, ok: true });
+        assert_eq!(
+            b.icon(),
+            "",
+            "the light render must not be published as the dark pill"
+        );
+
+        // ...and the module asks for the dark one instead.
+        let (actions, _) = drive(&mut b, EventBattery::Observed { battery: level(50) });
+        assert!(
+            actions
+                .iter()
+                .any(|a| matches!(a, ActionBattery::Render { dark: true, .. })),
+            "expected a redraw for the new appearance, got {actions:?}"
+        );
     }
 }

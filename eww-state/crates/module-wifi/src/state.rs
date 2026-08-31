@@ -54,6 +54,12 @@ struct Joining {
 }
 
 impl StateWifi {
+    /// Follow the desktop's light/dark preference. The parent owns the theme
+    /// and hands it down; this module never asks what it is.
+    pub fn set_icons_dir(&mut self, dir: &str) {
+        self.cfg.set_icons_dir(dir);
+    }
+
     pub fn new(cfg: ConfigWifi) -> StateWifi {
         StateWifi {
             cfg,
@@ -232,20 +238,35 @@ impl Module for StateWifi {
     }
 
     fn vars(&self, out: &mut WireVars) {
-        let networks: Vec<WireJson> = self
+        // macOS splits the list in two: the network in use sits under "Known
+        // Network", everything else under "Other Networks". Publishing them as
+        // one array and labelling it "Known Network" was a lie about 15 of the
+        // 16 rows, and the widget cannot partition a list itself.
+        let row = |n: &crate::model::WifiNetwork| {
+            WireJson::Obj(vec![
+                ("ssid", WireJson::s(&n.ssid)),
+                ("ssid_b64", WireJson::s(b64(&n.ssid))),
+                ("signal", WireJson::Int(n.signal as i64)),
+                ("secure", WireJson::Bool(n.secure)),
+                ("active", WireJson::Bool(n.active)),
+                ("icon", WireJson::s(self.cfg.icon(signal_icon(n.signal)))),
+                ("icon_on", WireJson::s(self.cfg.icon("wifi-on-symbolic"))),
+            ])
+        };
+        let known: Vec<WireJson> = self
             .net
             .networks
             .iter()
-            .map(|n| {
-                WireJson::Obj(vec![
-                    ("ssid", WireJson::s(&n.ssid)),
-                    ("ssid_b64", WireJson::s(b64(&n.ssid))),
-                    ("signal", WireJson::Int(n.signal as i64)),
-                    ("secure", WireJson::Bool(n.secure)),
-                    ("active", WireJson::Bool(n.active)),
-                    ("icon", WireJson::s(self.cfg.icon(signal_icon(n.signal)))),
-                ])
-            })
+            .filter(|n| n.active)
+            .map(&row)
+            .collect();
+        let others: Vec<WireJson> = self
+            .net
+            .networks
+            .iter()
+            .filter(|n| !n.active)
+            .take(self.cfg.max_rows)
+            .map(&row)
             .collect();
 
         out.set("net_icon", self.icon());
@@ -254,11 +275,14 @@ impl Module for StateWifi {
             WireJson::Obj(vec![
                 ("enabled", WireJson::Bool(self.net.enabled)),
                 ("subtitle", WireJson::s(self.subtitle())),
+                ("list_h", WireJson::Int(self.cfg.list_height(others.len()))),
+                ("has_known", WireJson::Bool(!known.is_empty())),
+                ("known", WireJson::Arr(known)),
                 (
-                    "list_h",
-                    WireJson::Int(self.cfg.list_height(networks.len())),
+                    "lock_icon",
+                    WireJson::s(self.cfg.icon("lock-badge-symbolic")),
                 ),
-                ("networks", WireJson::Arr(networks)),
+                ("networks", WireJson::Arr(others)),
             ]),
         );
         out.set(

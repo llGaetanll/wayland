@@ -10,9 +10,9 @@ use crate::svg;
 pub fn perform(action: &ActionBattery, cache: &Path) -> Option<EventBattery> {
     match action {
         ActionBattery::Sample => Some(probe::sample()),
-        ActionBattery::Render { id, battery } => Some(EventBattery::Finished {
+        ActionBattery::Render { id, battery, dark } => Some(EventBattery::Finished {
             id: *id,
-            ok: svg::render(cache, *battery).is_ok(),
+            ok: svg::render(cache, *battery, *dark).is_ok(),
         }),
     }
 }

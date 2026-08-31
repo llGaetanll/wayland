@@ -1,9 +1,9 @@
-//! Talking to the compositor.
+//! Listening to the compositor.
 //!
-//! Hyprland streams events on a socket; we only care whether the focused
-//! workspace has a fullscreen window, so the bar and dock can get out of the
-//! way. Reacting to the event beats polling for it: the bar hides in the same
-//! frame the window goes fullscreen.
+//! Hyprland streams events on a socket. Nothing here reads one of them for its
+//! content: the line only says that the layout may have changed, and the Spaces
+//! module answers that by looking. Reacting to the event beats polling for it —
+//! the bar hides in the same frame a window goes fullscreen.
 
 use std::io::BufRead;
 use std::io::BufReader;
@@ -12,26 +12,11 @@ use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 
-use module_bar::Event;
-use module_bar::EventBar;
+use module_bar::ModuleId;
 
 use crate::runtime_daemon::Msg;
 
-pub fn sample() -> Option<EventBar> {
-    let out = exec::out("hyprctl", &["activeworkspace"])?;
-    Some(EventBar::Fullscreen {
-        on: parse_fullscreen(&out),
-    })
-}
-
-fn parse_fullscreen(out: &str) -> bool {
-    out.lines()
-        .find_map(|l| l.trim().strip_prefix("hasfullscreen:"))
-        .map(|v| v.trim() != "0")
-        .unwrap_or(false)
-}
-
-/// Events after which the answer to "is anything fullscreen here?" may differ.
+/// Events after which the layout may look different.
 fn is_interesting(line: &str) -> bool {
     let name = line.split_once(">>").map(|(n, _)| n).unwrap_or(line);
     matches!(
@@ -59,15 +44,15 @@ fn socket_path() -> Option<PathBuf> {
     )
 }
 
-/// Follow the compositor's event stream, asking for a fullscreen re-check
-/// whenever something happened that could change the answer. Reconnects on its
+/// Follow the compositor's event stream, asking for a fresh look whenever
+/// something happened that could have changed the layout. Reconnects on its
 /// own, so a compositor restart doesn't need one here.
 pub fn watch(events: Sender<Msg>) {
     let spawned = std::thread::Builder::new()
         .name("hypr".into())
         .spawn(move || loop {
             let Some(path) = socket_path() else {
-                tracing::info!("not running under Hyprland; fullscreen is not watched");
+                tracing::info!("not running under Hyprland; the layout is not watched");
                 return;
             };
             match UnixStream::connect(&path) {
@@ -77,8 +62,7 @@ pub fn watch(events: Sender<Msg>) {
                         if !is_interesting(&line) {
                             continue;
                         }
-                        let due = Event::Bar(EventBar::FullscreenDue);
-                        if events.send(Msg::Ev(due)).is_err() {
+                        if events.send(Msg::Ev(ModuleId::Spaces.due())).is_err() {
                             return;
                         }
                     }
@@ -95,23 +79,13 @@ pub fn watch(events: Sender<Msg>) {
 #[cfg(test)]
 mod tests {
     use super::is_interesting;
-    use super::parse_fullscreen;
 
     #[test]
-    fn only_layout_changing_events_trigger_a_recheck() {
+    fn only_layout_changing_events_ask_for_a_look() {
         assert!(is_interesting("fullscreen>>1"));
         assert!(is_interesting("workspacev2>>2,2"));
         assert!(is_interesting("closewindow>>abc123"));
         assert!(!is_interesting("activelayout>>keyboard,us"));
         assert!(!is_interesting("windowtitle>>abc123"));
-    }
-
-    #[test]
-    fn fullscreen_flag() {
-        assert!(parse_fullscreen(
-            "workspace ID 2 (2) on monitor eDP-1:\n\tmonitorID: 0\n\thasfullscreen: 1"
-        ));
-        assert!(!parse_fullscreen("\thasfullscreen: 0"));
-        assert!(!parse_fullscreen(""));
     }
 }

@@ -25,6 +25,12 @@ pub struct StateAudio {
 }
 
 impl StateAudio {
+    /// Follow the desktop's light/dark preference. The parent owns the theme
+    /// and hands it down; this module never asks what it is.
+    pub fn set_icons_dir(&mut self, dir: &str) {
+        self.cfg.set_icons_dir(dir);
+    }
+
     pub fn new(cfg: ConfigAudio) -> StateAudio {
         StateAudio {
             cfg,

@@ -34,6 +34,12 @@ impl Default for StateBacklight {
 }
 
 impl StateBacklight {
+    /// Follow the desktop's light/dark preference. The parent owns the theme
+    /// and hands it down; this module never asks what it is.
+    pub fn set_icons_dir(&mut self, dir: &str) {
+        self.cfg.set_icons_dir(dir);
+    }
+
     pub fn new(cfg: ConfigBacklight) -> StateBacklight {
         StateBacklight {
             cfg,

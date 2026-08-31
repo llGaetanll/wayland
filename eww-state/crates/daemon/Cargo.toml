@@ -19,6 +19,7 @@ module-bluetooth = { path = "../module-bluetooth" }
 module-date = { path = "../module-date" }
 module-dock = { path = "../module-dock" }
 module-shot = { path = "../module-shot" }
+module-spaces = { path = "../module-spaces" }
 module-theme = { path = "../module-theme" }
 module-wifi = { path = "../module-wifi" }
 tracing = "0.1"

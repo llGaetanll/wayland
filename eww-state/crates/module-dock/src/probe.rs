@@ -9,6 +9,39 @@ pub fn sample(conf: &Path) -> EventDock {
     EventDock::Observed { apps: read(conf) }
 }
 
+/// Which dock apps the compositor has a window for. macOS shows the dot for an
+/// app that is *running*, and a window is the only evidence of that we can get
+/// without a process table walk that would guess at least as often.
+pub fn sample_running(ids: &[String]) -> EventDock {
+    let out = exec::out("hyprctl", &["clients"]).unwrap_or_default();
+    EventDock::Running {
+        ids: running_ids(ids, &out),
+    }
+}
+
+fn running_ids(ids: &[String], clients: &str) -> Vec<String> {
+    let classes: Vec<String> = clients
+        .lines()
+        .filter_map(|l| l.trim().strip_prefix("class:"))
+        .map(|c| c.trim().to_ascii_lowercase())
+        .filter(|c| !c.is_empty())
+        .collect();
+    ids.iter()
+        .filter(|id| classes.iter().any(|c| matches(id, c)))
+        .cloned()
+        .collect()
+}
+
+/// A dock id and a window class name the same app in different registries:
+/// `alacritty` vs `Alacritty`, `signal` vs `signal-desktop`. Case-folded
+/// containment either way is enough to tell them apart from each other, and is
+/// wrong only for ids that are substrings of unrelated classes — which is why
+/// the id is the user's own short name and not a fragment.
+fn matches(id: &str, class: &str) -> bool {
+    let id = id.to_ascii_lowercase();
+    id == class || class.contains(&id) || id.contains(class)
+}
+
 /// `dock.conf` is `id<TAB>command<TAB>icon`, one app per line, in dock order.
 /// The file *is* the order — there is no second list to disagree with it.
 pub fn read(conf: &Path) -> Vec<DockApp> {
@@ -44,6 +77,34 @@ fn parse(text: &str) -> Vec<DockApp> {
 #[cfg(test)]
 mod tests {
     use super::parse;
+    use super::running_ids;
+
+    fn ids(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| s.to_string()).collect()
+    }
+
+    const CLIENTS: &str = "\
+Window 558156ab0980 -> 1:system:
+\tworkspace: 3 (3)
+\tclass: Alacritty
+\tfullscreen: 1
+
+Window 5581569f1230 -> Firefox:
+\tworkspace: 1 (1)
+\tclass: firefox
+\tfullscreen: 0
+";
+
+    #[test]
+    fn a_window_class_finds_its_dock_app() {
+        let found = running_ids(&ids(&["firefox", "alacritty", "discord"]), CLIENTS);
+        assert_eq!(found, vec!["firefox", "alacritty"], "discord has no window");
+    }
+
+    #[test]
+    fn no_windows_is_nothing_running() {
+        assert!(running_ids(&ids(&["firefox"]), "").is_empty());
+    }
 
     #[test]
     fn conf_roundtrip() {

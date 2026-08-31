@@ -25,6 +25,7 @@ dependencies = [
  "module-date",
  "module-dock",
  "module-shot",
+ "module-spaces",
  "module-theme",
  "module-wifi",
  "tracing",
@@ -66,6 +67,7 @@ dependencies = [
  "module-date",
  "module-dock",
  "module-shot",
+ "module-spaces",
  "module-theme",
  "module-wifi",
  "util-eval",
@@ -110,6 +112,16 @@ version = "0.1.0"
 dependencies = [
  "api-core",
  "tracing",
+ "util-exec",
+]
+
+[[package]]
+name = "module-spaces"
+version = "0.1.0"
+dependencies = [
+ "api-core",
+ "tracing",
+ "util-eval",
  "util-exec",
 ]
 
