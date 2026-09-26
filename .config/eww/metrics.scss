@@ -1,0 +1,17 @@
+// The single scale knob for every eww surface.
+//
+// Every length in eww.scss is written as `<macOS points> * $ui-scale`, so the
+// measured number stays visible next to it and this is the only value to
+// change. The macOS points come from ~/macos-match/targets.json, measured off
+// the captures in ~/macos-ui-capture.
+//
+// Why it is not 1: the capture machine is a 2x Retina Mac, where one point is
+// about two physical pixels. This panel is 1920x1200 over ~14.5", so at scale
+// 1.0 one point is one physical pixel and every surface comes out roughly 1.4x
+// physically smaller than the same design on the Mac. 1.25 splits the
+// difference and keeps the bar compact.
+//
+// KEEP IN SYNC: `ui_scale` in eww-state (crates/module-bar/src/config.rs). The
+// daemon needs the same number because it sizes the dropdown scroll areas in
+// rows, and eww.yuck needs it for window geometry, which CSS cannot set.
+$ui-scale: 1.25;

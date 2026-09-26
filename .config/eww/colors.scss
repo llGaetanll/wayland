@@ -1,5 +1,33 @@
 // Mirror of ~/.config/colors.sh — keep the two in sync.
 $accent: #0a84ff;
 
+// Panel material. Both numbers below are FITTED, not chosen: see
+// ~/macos-match/targets.json. Regressing the Dock's fill against the wallpaper
+// showing through it, over 1000 columns and two independent fill strips of
+// desktop/full-desktop.png, gives alpha 0.72-0.76 over a tint near #4a4a4c once
+// the wallpaper's orange cast is taken back out. The wallpaper-independent
+// check is that our Dock must read rgb(55,55,56) over a black desktop and
+// rgb(121,121,122) over a white one; tools/report.py asserts exactly that.
+$dock-dark: rgba(74, 74, 76, 0.74);
+$dock-light: rgba(246, 246, 248, 0.72);
+
+// The menu bar is the one surface these captures cannot pin down: the Mac's
+// wallpaper under it is flat near-black (#050911) and the bar reads #020711, so
+// its alpha is unrecoverable — over that backdrop a transparent bar and a dark
+// one look identical. Solid-background menu bar shots are requested as item 3
+// of ~/macos-ui-capture/REQUESTS.txt. Until they arrive this is deliberately
+// dark enough to keep white text legible over the user's bright wallpaper,
+// which is a usability floor macOS meets by recolouring its menu bar text.
+$bar-dark: rgba(0, 0, 0, 0.45);
+$bar-light: rgba(246, 246, 248, 0.72);
+
+// The dropdown panels. macOS's popover material is darker than the Dock's: the
+// Wi-Fi panel reads rgb(34,34,35) over a near-black desktop where the Dock
+// reads 55. Taking the Dock's fitted alpha of 0.74 (same vibrancy family, and
+// the panels sit over the same wallpaper so it cannot be fitted separately)
+// puts the tint at (34 - 0.26*6)/0.74 = 44.
+$menu-dark: rgba(44, 44, 46, 0.74);
+$menu-light: rgba(246, 246, 248, 0.72);
+
 $background-light: rgba(244, 244, 246, 0.7);
 $background-dark: rgba(38, 38, 40, 0.7);
