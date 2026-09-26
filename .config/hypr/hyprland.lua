@@ -4,11 +4,14 @@ local mod = "SUPER"
 local terminal = os.getenv("TERMINAL") or "alacritty"
 local browser = os. getenv("BROWSER") or "firefox"
 
--- Close via mac-fullscreen.sh so a fullscreen-Space window also returns to the
--- desktop Space and lets the emptied Space auto-destroy.
-hl.bind(mod .. " + Q",      hl.dsp.exec_cmd("/home/al/.config/hypr/scripts/mac-fullscreen.sh close"))
+-- Close through eww-state: a window in a fullscreen Space has to be left behind
+-- before it is closed, or the emptied Space lingers instead of auto-destroying.
+hl.bind(mod .. " + Q",      hl.dsp.exec_cmd("eww-state window close"))
 hl.bind(mod .. " + Return", hl.dsp.exec_cmd(terminal))
 hl.bind(mod .. " + W", hl.dsp.exec_cmd(browser))
+
+-- Toggle fullscreen on the focused window (moves it to its own Space, see below).
+hl.bind(mod .. " + ALT + F", hl.dsp.window.fullscreen({ mode = "fullscreen" }))
 
 -- Spotlight-style launcher; theme in ~/.config/rofi/.
 hl.bind(mod .. " + Space", hl.dsp.exec_cmd("rofi -show drun"))
@@ -32,8 +35,10 @@ hl.bind(mod .. " + ALT + plus",  hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%+"
 hl.bind(mod .. " + ALT + minus", hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%-"), { locked = true, repeating = true })
 
 -- Screenshot: slurp region-select → grim → eww preview menu with Copy/Save.
-hl.bind("Print",               hl.dsp.exec_cmd("/home/al/.config/eww/scripts/screenshot.sh"))
-hl.bind(mod .. " + SHIFT + S", hl.dsp.exec_cmd("/home/al/.config/eww/scripts/screenshot.sh"))
+-- eww-state runs the capture and stages the result; a second press while the
+-- selector is up is dropped by its state machine rather than by a lock file.
+hl.bind("Print",               hl.dsp.exec_cmd("eww-state shot capture"))
+hl.bind(mod .. " + SHIFT + S", hl.dsp.exec_cmd("eww-state shot capture"))
 
 -- Remap Caps Lock to Esc
 hl.config({
@@ -60,12 +65,12 @@ hl.on("hyprland.start", function() hl.exec_cmd("pipewire") end)
 hl.on("hyprland.start", function() hl.exec_cmd("wireplumber") end)
 hl.on("hyprland.start", function() hl.exec_cmd("pipewire-pulse") end)
 
--- Bar + dock (~/.config/eww). Start the daemon explicitly and open both windows
--- against it in ONE handler: two handlers relying on `eww open` to auto-start the
--- daemon race, and the survivor's window registry ends up inconsistent — so
--- `eww close bar` from sync-bars.sh silently no-ops and the bar never hides.
+-- Bar + dock. eww-state is the only thing that starts eww, opens or closes its
+-- windows, or writes its variables; nothing here opens a window itself. That is
+-- the whole point of it: two things racing to open the same window is what left
+-- the old setup with an inconsistent registry and a bar that would not hide.
 hl.on("hyprland.start", function()
-    hl.exec_cmd("sh -c 'eww daemon; eww open bar; eww open dock'")
+    hl.exec_cmd("eww-state daemon")
 end)
 
 -- Animation Curves
@@ -121,107 +126,24 @@ hl.bind("SUPER + mouse:272", hl.dsp.window.drag(),   { mouse = true })
 hl.bind("SUPER + mouse:273", hl.dsp.window.resize(), { mouse = true })
 
 -- macOS-like fullscreen "Spaces".
--- Any window entering a fullscreen state is whisked onto its own empty workspace
--- ("Space") and comes back when it leaves. Driven by the window.fullscreen event
--- rather than a button, so every route in behaves the same — green traffic-light,
--- double-click, or an app's own F11 — including apps with no hyprbars button.
--- The bars hide while a Space is focused; a 3-finger swipe slides between Spaces.
+-- A window entering a fullscreen state is whisked onto its own empty workspace
+-- ("Space") and comes back when it leaves, and the bars hide while one is
+-- focused. None of that is here any more: eww-state watches the same compositor
+-- event socket and owns where a fullscreen window lives, so this file keeps only
+-- what the compositor itself has to know.
 hl.config({ general = { gaps_in = 0 } })
 
--- Guarded so `hyprctl reload` (which re-runs this file) can't stack duplicate
--- handlers — a doubled swipe gesture would jump two Spaces at once.
+-- A 3-finger swipe slides between Spaces. scale is a delta multiplier: lower =
+-- more finger travel per switch.
+--
+-- Guarded because `hyprctl reload` re-runs this file into the same process
+-- without clearing what it registered last time, and a doubled gesture jumps
+-- two Spaces per swipe.
 if not _G.__mac_spaces_init then
     _G.__mac_spaces_init = true
-
-    local sync_bars = "/home/al/.config/hypr/scripts/sync-bars.sh"
-
-    -- The workspace a window came from, one file per window address. On disk
-    -- rather than in memory so it survives `hyprctl reload` and is readable by
-    -- sync-bars.sh and mac-fullscreen.sh.
-    local runtime = (os.getenv("XDG_RUNTIME_DIR") or "/tmp") .. "/mac-fs"
-    hl.exec_cmd("mkdir -p '" .. runtime .. "'")
-    local function origin_path(addr) return runtime .. "/" .. addr end
-    local function origin_get(addr)
-        local f = io.open(origin_path(addr), "r"); if not f then return nil end
-        local v = f:read("*a"); f:close()
-        return (v and v ~= "") and v or nil
-    end
-    local function origin_set(addr, ws)
-        local f = io.open(origin_path(addr), "w"); if not f then return end
-        f:write(tostring(ws)); f:close()
-    end
-    local function origin_clear(addr) os.remove(origin_path(addr)) end
-
-    -- Move as an INSTANT cut: kill the workspaces slide for this one move (the
-    -- frames are identical, so the cut is invisible), then restore it so 3-finger
-    -- swipes still animate. The re-enable must be deferred — flipping it back in
-    -- the same tick renders the switch with the slide already restored.
-    local function move_instant(addr, ws)
-        hl.animation({ leaf = "workspaces", enabled = false })
-        hl.dispatch(hl.dsp.window.move({ workspace = ws, follow = true, window = "address:" .. addr }))
-        hl.timer(function()
-            hl.animation({ leaf = "workspaces", enabled = true, speed = 8, bezier = "default" })
-        end, { timeout = 100, type = "oneshot" })
-    end
-
-    -- Moving a fullscreen window makes Hyprland re-emit window.fullscreen (a
-    -- spurious fs=0 then fs=1 on the destination workspace); acting on those
-    -- echoes bounces the window forever. So events never act directly: each bumps
-    -- a per-window generation token and arms a timer, and only the last event in a
-    -- burst survives to reconcile against the settled state.
-    local gen = {}
-    local function reconcile(addr)
-        local cur = hl.get_window("address:" .. addr)
-        if not cur then origin_clear(addr); gen[addr] = nil; return end   -- window vanished
-        local fs = cur.fullscreen or 0
-        local origin = origin_get(addr)
-
-        if fs ~= 0 and not origin then
-            -- ENTER: record the origin workspace, then let the grow animation play
-            -- before instant-cutting onto an empty Space. The bars were already
-            -- hidden by the raw handler, which freed their reserved area so the
-            -- window could grow edge-to-edge first — the precondition for a
-            -- frame-identical cut. The post-move sync rides on workspace.active.
-            origin_set(addr, (cur.workspace and cur.workspace.id) or 1)
-            hl.timer(function()
-                local c = hl.get_window("address:" .. addr)
-                if c and (c.fullscreen or 0) ~= 0 and origin_get(addr) then
-                    move_instant(addr, "empty")
-                end
-            end, { timeout = 250, type = "oneshot" })
-        elseif fs == 0 and origin then
-            -- EXIT: cut back to origin, which empties the Space so Hyprland
-            -- auto-destroys it.
-            origin_clear(addr)
-            move_instant(addr, origin)
-        end
-        -- fs~=0 & origin   -> already in a Space (spurious re-fullscreen): no-op
-        -- fs==0 & !origin  -> ordinary window toggling maximize off: no-op
-    end
-
-    hl.on("window.fullscreen", function(w)
-        if type(w) ~= "table" or not w.address then w = hl.get_active_window() end
-        if not w or not w.address then return end
-        local addr = w.address
-        -- Hide the bars immediately on the way IN, without waiting for the
-        -- debounced move. Only on entry: on exit the bars come back later via
-        -- workspace.active, so they don't flash in mid-shrink.
-        if (w.fullscreen or 0) ~= 0 then hl.exec_cmd(sync_bars) end
-        gen[addr] = (gen[addr] or 0) + 1
-        local mine = gen[addr]
-        hl.timer(function()
-            if gen[addr] == mine then reconcile(addr) end
-        end, { timeout = 140, type = "oneshot" })
-    end)
-
-    -- Every Space enter/exit moves with follow=true, so this covers both, plus
-    -- 3-finger swipes. window.close is the case with no workspace switch.
-    hl.on("workspace.active", function() hl.exec_cmd(sync_bars) end)
-    hl.on("window.close",     function() hl.exec_cmd(sync_bars) end)
-
-    -- scale is a delta multiplier: lower = more finger travel per switch.
     hl.gesture({ fingers = 3, direction = "horizontal", action = "workspace", scale = 0.5 })
 end
+
 
 -- The Lua config has a permission model; without this, plugins are denied.
 hl.permission("/usr/(bin|local/bin)/hyprpm", "plugin", "allow")
@@ -250,13 +172,17 @@ if hl.plugin and hl.plugin.hyprbars ~= nil then
         on_double_click = [[hyprctl dispatch "hl.dsp.window.fullscreen({ mode = 'maximized' })"]],
     } } })
 
-    -- Traffic lights: red = close, green = maximize. Actions run through hyprbars'
-    -- exec dispatcher, so a Lua dispatcher must be spelled
+    -- Traffic lights: red = close, yellow = minimize, green = maximize. Actions
+    -- run through hyprbars' exec dispatcher, so a Lua dispatcher must be spelled
     -- `hyprctl dispatch "<dispatcher>"` — a bare one is parsed as Lua. Green only
-    -- toggles maximize; the window.fullscreen handler above does the Space move.
-    -- Red goes through mac-fullscreen.sh because closing inside a Space must hop
-    -- back to the desktop Space first so the emptied Space auto-destroys.
-    hl.plugin.hyprbars.add_button({ bg_color = "rgb(ff5f57)", fg_color = "rgb(2e2e2e)", size = 11, icon = "×", action = "/home/al/.config/hypr/scripts/mac-fullscreen.sh close" })
+    -- toggles maximize; eww-state does the Space move, off the same event.
+    -- Red goes through eww-state because a window closed inside a Space has to
+    -- leave it first, or the emptied Space lingers instead of auto-destroying.
+    -- Yellow does too, and for a related reason: there is no minimize in
+    -- Hyprland, so it is a move onto a workspace nothing draws, and only
+    -- eww-state knows where the window came from or has a dock to put it in.
+    hl.plugin.hyprbars.add_button({ bg_color = "rgb(ff5f57)", fg_color = "rgb(2e2e2e)", size = 11, icon = "×", action = "eww-state window close" })
+    hl.plugin.hyprbars.add_button({ bg_color = "rgb(febc2e)", fg_color = "rgb(2e2e2e)", size = 11, icon = "−", action = "eww-state window minimize" })
     hl.plugin.hyprbars.add_button({ bg_color = "rgb(28c840)", fg_color = "rgb(2e2e2e)", size = 11, icon = "+", action = [[hyprctl dispatch "hl.dsp.window.fullscreen({ mode = 'maximized' })"]] })
 
     -- Title bars are opt-in: a catch-all rule hides them, then these apps get one
@@ -265,7 +191,7 @@ if hl.plugin and hl.plugin.hyprbars ~= nil then
     -- and blends the bar into that app's own background; nil uses bar_color.
     local titlebar_apps = {
         { class = "Alacritty", color = "rgba(181818d9)" },
-        { class = "nemo",      color = nil            },
+        { class = "nemo",      color = "rgba(e8e8ecff)" },
     }
 
     -- Hide the bar on everything by default...

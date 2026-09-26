@@ -1,126 +1,229 @@
-;; Follow the system light/dark preference, applied as a CSS class so eww.scss
-;; can style each theme.
-(defpoll theme :interval "5s" :initial "light"
-  `gsettings get org.gnome.desktop.interface color-scheme | grep -qi dark && echo dark || echo light`)
+;; Every variable below is pushed by `eww-state`, which owns all of this state
+;; and is the only thing allowed to write them or to open and close these
+;; windows. There is not a single defpoll left: what to sample and how often is
+;; a rule, so it lives in the daemon's state machine (`eww-state polls` prints
+;; the current plan). The initial values here are only what eww shows in the
+;; instant before the daemon's first push lands.
 
-;; Apps and order come from dock.sh. Swaps push updates live via
-;; `eww update dock_apps=...`, so the 1h interval is just a lazy resync.
-(defpoll dock_apps :interval "3600s"
-  :initial `~/.config/eww/scripts/dock.sh list`
-  `~/.config/eww/scripts/dock.sh list`)
+(defvar theme "light")
+
+(defvar clock "")
+
+;; The dock's apps, in order, each with whether it currently has a window.
+(defvar dock_apps "[]")
 
 ;; One dock slot: the eventbox makes it both draggable and a drop target, so
-;; dropping app {} here swaps the two in the order file. A plain click falls
-;; through to the button.
-(defwidget applaunch [id icon cmd]
+;; dropping app {} here swaps the two. A plain click falls through to the button.
+;; The tile and the running dot are stacked, because macOS puts the dot under
+;; the icon rather than on it, and the slab is tall enough to hold both.
+(defwidget applaunch [id icon running]
   (eventbox :class "dock-slot" :dragvalue id :dragtype "values"
-            :ondropped "setsid -f ~/.config/eww/scripts/dock.sh swap {} ${id}"
-    ;; `setsid -f` rather than a bare `&`: eww SIGKILLs a widget's command once
-    ;; :timeout (default 200ms) expires, taking a merely-backgrounded child with it.
-    (button :class "dock-btn"
-            :onclick "setsid -f sh -c 'cd ~ && ${cmd}'"
-      ;; Fixed-size cell with the icon centered, so hover growth happens in place
-      ;; and neighbours never move. The icon is a background-image so the grow is
-      ;; animated in CSS with no per-hover subprocess.
+            :ondropped "eww-state dock swap {} ${id}"
+    ;; No `setsid -f` anywhere in this file any more. Every handler is one
+    ;; connect-write-read on a unix socket and returns in well under eww's
+    ;; 200ms :timeout, which is what used to truncate the shell handlers
+    ;; mid-way and leave the state lying about what was on screen.
+    (box :orientation "vertical" :space-evenly false :halign "center"
+      (button :class "dock-btn" :onclick "eww-state dock launch ${id}"
+        ;; Fixed-size cell with the icon centred, so nothing a tile does can
+        ;; move its neighbours.
+        (box :class "dock-cell" :halign "center" :valign "center"
+          (box :class "dock-icon" :halign "center" :valign "center"
+               :style "background-image: url('${icon}');")))
+      (box :class "dock-dot ${running ? 'on' : 'off'}" :halign "center"))))
+
+;; The Trash is not in dock.conf: in macOS it is not a dock app you can reorder
+;; or remove, it is a fixture at the end past the separator. Modelling it as one
+;; would make it draggable and let the user drop another app onto it.
+(defwidget trash []
+  (box :orientation "vertical" :space-evenly false :halign "center"
+    (button :class "dock-btn" :onclick "eww-state dock launch trash"
       (box :class "dock-cell" :halign "center" :valign "center"
         (box :class "dock-icon" :halign "center" :valign "center"
-             :style "background-image: url('${icon}');")))))
+             :style "background-image: url('/home/al/.config/eww/icons/apps/trash.png');")))
+    (box :class "dock-dot off" :halign "center")))
+
+;; Windows put away in the dock. macOS keeps these past the separator, to the
+;; right of every app and in the order they were minimized, and draws the window
+;; itself rather than its app icon — the icon is badged on the corner so it is
+;; still obvious what the tile belongs to. The daemon photographs a window on
+;; its way out, which is the only moment there is anything left to photograph.
+(defvar dock_minimized "[]")
+
+(defwidget minimized [addr thumb icon title width]
+  (box :orientation "vertical" :space-evenly false :halign "center"
+    ;; The one window command that names a window: a minimized one is not the
+    ;; focused window and, being off screen entirely, never can be.
+    (button :class "dock-btn" :tooltip title
+            :onclick "eww-state window restore ${addr}"
+      ;; Sized by the daemon, not the stylesheet: a tile is as wide as the
+      ;; window was, drawn at the tile height, and GTK sizes a box long before
+      ;; it knows anything about the image about to be painted into it.
+      (box :class "dock-cell" :halign "center" :valign "center"
+           :style "min-width: ${width}px;"
+        (box :class "dock-thumb" :halign "center" :valign "center"
+             :style "background-image: url('${thumb}'); min-width: ${width}px;"
+          (box :class "dock-badge" :halign "end" :valign "end"
+               :style "background-image: url('${icon}');"))))
+    ;; No dot: the app's own tile already carries one, because a window that is
+    ;; minimized is still a window the app has open.
+    (box :class "dock-dot off" :halign "center")))
 
 (defwidget dock []
-  (box :class "dock ${theme}" :space-evenly false :valign "center" :spacing 2
-    (for a in {dock_apps}
-      (applaunch :id {a.id} :cmd {a.cmd} :icon {a.icon}))))
+  ;; The `for` lives in its own box on purpose. eww appends the widgets a `for`
+  ;; produces to the parent AFTER the siblings written below it, so with the
+  ;; loop as a direct child the Trash and the separator came out at the left-
+  ;; hand end of the dock, in front of every app. Giving the loop a container of
+  ;; its own makes this box's three children static, and static children keep
+  ;; the order they are written in.
+  (box :class "dock ${theme}" :space-evenly false :valign "center" :spacing 0
+    (box :class "dock-apps" :space-evenly false :spacing 0
+      (for a in {dock_apps}
+        (applaunch :id {a.id} :icon {a.icon} :running {a.running})))
+    (box :class "dock-sep")
+    ;; Its own box for the same reason the app loop has one.
+    (box :class "dock-minimized" :space-evenly false :spacing 0
+      (for m in {dock_minimized}
+        (minimized :addr {m.addr} :thumb {m.thumb} :icon {m.icon}
+                   :title {m.title} :width {m.width})))
+    (trash)))
 
 (defwindow dock
   :monitor 0
-  :geometry (geometry :y "0px" :anchor "bottom center")
+  ;; 5pt of desktop below the slab, measured: the Dock's bottom edge is at
+  ;; y=1075 on a 1080pt screen.
+  ;; 5pt of desktop below the slab x 1.25 scale. eww resolves defwindow
+  ;; geometry statically — a variable here is "Unknown variable" at open time —
+  ;; so these are literals. KEEP IN SYNC with $ui-scale in metrics.scss.
+  :geometry (geometry :y "6px" :anchor "bottom center")
   :stacking "overlay"
   :exclusive false
   :focusable false
   (dock))
 
-(defpoll clock :interval "20s" `date '+%a %b %e  %H:%M'`)
-
-;; Each status poll echoes the path of the icon matching the current state, shown
-;; via background-image, so it reloads whenever the path changes. Volume and
-;; brightness poll fast so keybind changes show up quickly.
-(defpoll vol_icon  :interval "2s"  `~/.config/eww/scripts/status.sh volume`)
-(defpoll bri_icon  :interval "3s"  `~/.config/eww/scripts/status.sh brightness`)
-(defpoll net_icon  :interval "6s"  `~/.config/eww/scripts/status.sh network`)
-(defpoll bt_icon   :interval "6s"  `~/.config/eww/scripts/status.sh bluetooth`)
-(defpoll batt_icon :interval "15s" `~/.config/eww/scripts/battery.sh`)
+;; Each status var is the path of the icon matching the current state, shown via
+;; background-image, so it reloads whenever the path changes. The battery pill is
+;; an SVG the daemon regenerates, with the capacity baked into its filename for
+;; the same reason.
+(defvar vol_icon "")
+(defvar bri_icon "")
+(defvar net_icon "")
+(defvar bt_icon "")
+(defvar batt_icon "")
+(defvar batt_pct 0)
 
 ;; :spacing 0 is deliberate — the gap comes from .sicon's padding instead, so it
 ;; sits inside each button and stays clickable rather than being a dead zone.
 (defwidget statusicons []
   (box :class "status" :space-evenly false :valign "center" :spacing 0
-    (button :class "sicon" :onclick "setsid -f ~/.config/eww/scripts/menu.sh toggle volume"
-      (box :class "status-icon" :style "background-image: url('${vol_icon}');"))
-    (button :class "sicon" :onclick "setsid -f ~/.config/eww/scripts/menu.sh toggle brightness"
+    ;; macOS orders its system items speaker, Bluetooth, battery, Wi-Fi, and
+    ;; then the clock. Brightness has no menu bar item in macOS at all — it
+    ;; lives in Control Center — so it goes to the far left, out of the way of
+    ;; the run that has to read as the real thing.
+    (button :class "sicon" :onclick "eww-state menu toggle brightness"
       (box :class "status-icon" :style "background-image: url('${bri_icon}');"))
-    (button :class "sicon" :onclick "setsid -f ~/.config/eww/scripts/menu.sh toggle wifi"
-      (box :class "status-icon" :style "background-image: url('${net_icon}');"))
-    (button :class "sicon" :onclick "setsid -f ~/.config/eww/scripts/menu.sh toggle bt"
+    (button :class "sicon" :onclick "eww-state menu toggle volume"
+      (box :class "status-icon" :style "background-image: url('${vol_icon}');"))
+    (button :class "sicon" :onclick "eww-state menu toggle bt"
       (box :class "status-icon" :style "background-image: url('${bt_icon}');"))
-    (box :class "batt-icon" :style "background-image: url('${batt_icon}');")))
+    ;; valign center, or GTK gives this box the whole 16px row height and
+    ;; `background-size: contain` then scales the 25.5x12 glyph up to fit it,
+    ;; which comes out 4pt too wide.
+    ;; Two boxes: the outer one carries the same padding as a .sicon so the
+    ;; battery keeps the run's spacing, the inner one is exactly the glyph. GTK
+    ;; paints a background across the padding box, so a single box would size
+    ;; the glyph to the padded area and draw it several points too wide.
+    (box :class "batt-slot" :valign "center" :space-evenly false :spacing 0
+      (label :class "batt-pct" :valign "center" :text "${batt_pct}%")
+      (box :class "batt-icon" :valign "center"
+           :style "background-image: url('${batt_icon}');"))
+    (button :class "sicon" :onclick "eww-state menu toggle wifi"
+      (box :class "status-icon" :style "background-image: url('${net_icon}');"))))
 
 (defwidget bar []
   (centerbox :class "bar ${theme}"
     (box)                                   ;; left  — reserved for the app menu
     (box)                                   ;; center
-    (box :halign "end" :space-evenly false :spacing 12
+    (box :halign "end" :space-evenly false :spacing 0
       (statusicons)
       (label :class "bar-clock" :text clock))))
 
-;; Which bar dropdown is open ("" = none). Every such window is named
-;; `<name>-menu` and they share the single `menu-backdrop` click-catcher.
-;; menu.sh is the only thing allowed to write this var or open/close those
-;; windows; see its header. The screenshot preview below is deliberately outside
-;; this group — a Print press should not dismiss an open bar menu.
+;; Which bar dropdown is open ("" = none). Only ever written by the daemon, whose
+;; state machine holds it as a single Option<MenuId> — so "two menus open at
+;; once" is not a value that exists. The screenshot preview below is deliberately
+;; outside this group: a Print press should not dismiss an open bar menu.
 (defvar menu "")
 
-;; The poll only runs while the menu is open.
-(defpoll wifi :interval "5s" :run-while {menu == "wifi"}
-  :initial `{"enabled":true,"networks":[],"list_h":40}`
-  `~/.config/eww/scripts/wifi-list.sh`)
+;; The daemon polls the network faster while this menu is open and slower when it
+;; is not; the widget does not have to know that.
+(defvar wifi '{"enabled":true,"subtitle":"","list_h":40,"networks":[]}')
 
 ;; SSID currently being joined, so its row can show "Connecting…".
-;; wifi-action.sh sets it before the blocking nmcli call.
 (defvar wifi_connecting "")
 
 (defwidget wifi-panel []
   (box :class "menu ${theme}" :orientation "vertical" :space-evenly false
+    ;; Title and switch, nothing else. macOS carries no subtitle here: the
+    ;; network in use is the one marked in the list, not a line under the title.
     (box :class "menu-head" :space-evenly false :valign "center"
-      (box :orientation "vertical" :space-evenly false :halign "start" :hexpand true
-        (label :class "menu-title" :text "Wi-Fi" :halign "start")
-        (label :class "menu-sub" :halign "start" :limit-width 26 :show-truncated true
-               :text {wifi.enabled ? (wifi.connected != "" ? wifi.connected : "Not connected") : "Off"}))
-      (button :class "sw-btn" :valign "center"
-              :onclick "setsid -f ~/.config/eww/scripts/wifi-action.sh toggle"
+      (label :class "menu-title" :text "Wi-Fi" :halign "start" :hexpand true)
+      (button :class "sw-btn" :valign "center" :onclick "eww-state wifi toggle"
         (box :class "sw ${wifi.enabled ? 'on' : 'off'}" :valign "center" :vexpand false
           (box :class "sw-knob" :valign "center" :halign {wifi.enabled ? "end" : "start"}))))
     (box :class "sep")
+    ;; The network in use, then everything else — the two sections macOS shows.
+    ;; The daemon publishes them as separate arrays because a widget cannot
+    ;; partition a list, and labelling one list "Known Network" was wrong about
+    ;; every row but one.
+    (label :class "menu-section" :text "Known Network" :halign "start"
+           :visible {wifi.has_known})
+    (box :orientation "vertical" :space-evenly false
+      (for n in {wifi.known}
+        (button :class "row" :onclick "eww-state wifi connect ${n.ssid_b64}"
+          (box :space-evenly false :spacing 9 :valign "center"
+            (box :class "row-mark on" :valign "center" :halign "center"
+              (box :class "row-glyph"
+                   :style "background-image: url('${n.icon_on}');"))
+            (label :class "row-name" :text {n.ssid} :halign "start" :hexpand true
+                   :limit-width 24 :show-truncated true)
+            (box :class "row-lock" :valign "center" :visible {n.secure})))))
+    (label :class "menu-section" :text "Other Networks" :halign "start")
     ;; eventbox :cursor keeps the normal pointer during scroll; scroll and button
     ;; can't set one, and a bare scroll shows GTK's box-dot cursor.
     (scroll :class "menu-scroll" :vscroll true :height {wifi.list_h}
       (eventbox :cursor "default"
         (box :orientation "vertical" :space-evenly false :valign "start"
           (for n in {wifi.networks}
-            (button :class "row" :onclick "setsid -f ~/.config/eww/scripts/wifi-action.sh connect ${n.ssid_b64}"
+            ;; Base64: nothing an access point can call itself is ever
+            ;; interpreted, by a shell or by anything else.
+            (button :class "row" :onclick "eww-state wifi connect ${n.ssid_b64}"
               (box :space-evenly false :spacing 8 :valign "center"
-                (label :class "row-check" :text {n.active ? "✓" : ""})
+                ;; One leading icon column, as in Control Center. The network in
+                ;; use fills the circle with the accent and switches to the white
+                ;; glyph; the rest show the bare signal glyph.
+                (box :class "row-mark ${n.active ? 'on' : 'off'}" :valign "center"
+                     :halign "center"
+                  (box :class "row-glyph"
+                       :style "background-image: url('${n.active ? n.icon_on : n.icon}');"))
                 (label :class "row-name" :text {n.ssid} :halign "start" :hexpand true
                        :limit-width 24 :show-truncated true)
                 (label :class "row-connecting" :text "Connecting…"
                        :visible {n.ssid == wifi_connecting})
-                (box :class "row-icon" :style "background-image: url('${n.icon}');")))))))))
+                ;; The padlock is a trailing item in macOS, at the right-hand
+                ;; edge of the row, not a badge on the signal glyph: measured at
+                ;; x 280..289 in a panel whose right edge is 305. Its image is
+                ;; set in the stylesheet rather than by an inline :style — see
+                ;; the note on .row-lock in eww.scss.
+                (box :class "row-lock" :valign "center"
+                     :visible {n.secure})))))))))
 
 ;; focusable false is required: focusable true grabs keyboard focus and breaks
 ;; the click-outside backdrop. The cost is no Esc dismiss, since eww's
 ;; onkeypressed needs focus; that would need a Hyprland keybind instead.
 (defwindow wifi-menu
   :monitor 0
-  :geometry (geometry :anchor "top right" :x "8px" :y "4px" :width "320px")
+  ;; 8 / 4 / 298 pt x 1.25
+  :geometry (geometry :anchor "top right" :x "10px" :y "5px" :width "373px")
   :stacking "overlay"
   :focusable false
   (wifi-panel))
@@ -137,35 +240,37 @@
   :stacking "overlay"
   :focusable false
   :namespace "eww-backdrop"
-  (button :class "backdrop" :onclick "setsid -f ~/.config/eww/scripts/menu.sh close"
+  (button :class "backdrop" :onclick "eww-state menu close"
           :hexpand true :vexpand true))
 
 ;; Same pattern as Wi-Fi. A device click toggles its connection and leaves the
-;; menu open so the status updates in place.
-(defpoll bt :interval "5s" :run-while {menu == "bt"}
-  :initial `{"enabled":true,"devices":[],"list_h":40,"connected":""}`
-  `~/.config/eww/scripts/bt-list.sh`)
+;; menu open so the status updates in place — that difference is a rule in the
+;; daemon, not something this file decides.
+(defvar bt '{"enabled":true,"subtitle":"","list_h":40,"devices":[]}')
 (defvar bt_connecting "")
 
 (defwidget bt-panel []
   (box :class "menu ${theme}" :orientation "vertical" :space-evenly false
     (box :class "menu-head" :space-evenly false :valign "center"
-      (box :orientation "vertical" :space-evenly false :halign "start" :hexpand true
-        (label :class "menu-title" :text "Bluetooth" :halign "start")
-        (label :class "menu-sub" :halign "start" :limit-width 26 :show-truncated true
-               :text {bt.enabled ? (bt.connected != "" ? bt.connected : "On") : "Off"}))
-      (button :class "sw-btn" :valign "center"
-              :onclick "setsid -f ~/.config/eww/scripts/bt-action.sh toggle"
+      (label :class "menu-title" :text "Bluetooth" :halign "start" :hexpand true)
+      (button :class "sw-btn" :valign "center" :onclick "eww-state bt toggle"
         (box :class "sw ${bt.enabled ? 'on' : 'off'}" :valign "center" :vexpand false
           (box :class "sw-knob" :valign "center" :halign {bt.enabled ? "end" : "start"}))))
     (box :class "sep")
+    (label :class "menu-section" :text "Devices" :halign "start")
     (scroll :class "menu-scroll" :vscroll true :height {bt.list_h}
       (eventbox :cursor "default"
         (box :orientation "vertical" :space-evenly false :valign "start"
           (for d in {bt.devices}
-            (button :class "row" :onclick "setsid -f ~/.config/eww/scripts/bt-action.sh connect ${d.mac_b64}"
+            (button :class "row" :onclick "eww-state bt connect ${d.mac_b64}"
               (box :space-evenly false :spacing 8 :valign "center"
-                (label :class "row-check" :text {d.connected ? "✓" : ""})
+                ;; Same leading column as Wi-Fi. Every device shows the same
+                ;; glyph for now; the per-kind icons macOS uses would need the
+                ;; device class out of bluetoothctl, which the daemon does not
+                ;; read yet.
+                (box :class "row-mark disc ${d.connected ? 'on' : 'off'}" :valign "center"
+                     :halign "center"
+                  (box :class "row-glyph" :style "background-image: url('${d.icon}');"))
                 (label :class "row-name" :text {d.name} :halign "start" :hexpand true
                        :limit-width 26 :show-truncated true)
                 (label :class "row-connecting" :text "Connecting…"
@@ -173,59 +278,67 @@
 
 (defwindow bt-menu
   :monitor 0
-  :geometry (geometry :anchor "top right" :x "8px" :y "4px" :width "320px")
+  ;; 8 / 4 / 298 pt x 1.25
+  :geometry (geometry :anchor "top right" :x "10px" :y "5px" :width "373px")
   :stacking "overlay"
   :focusable false
   (bt-panel))
 
-;; Bare iOS-style sliders with the icon overlaid at the left. Values poll only
-;; while the popup is open.
-(defpoll vol_pct :interval "2s" :run-while {menu == "volume"} :initial "0"
-  `~/.config/eww/scripts/controls.sh get-volume`)
-(defpoll bri_pct :interval "2s" :run-while {menu == "brightness"} :initial "0"
-  `~/.config/eww/scripts/controls.sh get-brightness`)
+;; macOS's Sound and Display panels: a title, then a pill track whose filled
+;; part is WHITE with the glyph knocked out of it in dark, and a round white
+;; knob at the value. Not an accent-coloured bar — measured off
+;; control-center/sound-panel.png, where the fill samples #ffffff, the unfilled
+;; track #434344, and the track is 22pt tall with a 22pt knob.
+;;
+;; The daemon shows the requested value immediately and lets the probe confirm
+;; it later, so a poll already in flight cannot snap the knob back mid-drag.
+(defvar vol_pct "0")
+(defvar bri_pct "0")
 
-;; The scale paints itself: trough = the shared background color, highlight =
-;; accent up to the value, both clipped to the 12px radius so the fill stays
-;; rounded at either end. Colors come from colors.scss. The icon is overlaid last
-;; so it draws on top of the fill.
+;; The glyph sits on the white fill, so it has to be the dark ink in BOTH
+;; appearances — the daemon's own icon path follows the theme and would be white
+;; on white in dark mode. The light set is exactly the dark-ink set, so the path
+;; is rewritten rather than adding a second variable for it.
+(defwidget slider-panel [title icon value onchange]
+  (box :class "menu ${theme}" :orientation "vertical" :space-evenly false
+    (box :class "islider-head" :valign "center"
+      (label :class "menu-title" :text title :halign "start" :hexpand true))
+    (overlay :class "islider ${theme}"
+      ;; :timeout must beat eww's 200ms default, or a slow set is SIGKILLed
+      ;; mid-write. It never gets close now — the handler is a socket write.
+      (scale :class "islider-input" :hexpand true :value value :min 0 :max 100
+             :round-digits 0 :timeout "2s" :onchange onchange)
+      (box :class "islider-icon" :halign "start" :valign "center"
+           :style "background-image: url('${replace(icon, "/dark/", "/light/")}');"))))
+
 (defwidget vol-slider []
-  (overlay :class "islider ${theme}"
-    ;; Not detached, unlike every other handler here: a drag fires many times a
-    ;; second and each must land in order, which `setsid -f` can't promise.
-    ;; :timeout must beat eww's 200ms default, or a slow set is SIGKILLed
-    ;; mid-write and the slider drifts from the real volume.
-    (scale :class "islider-input" :hexpand true :value vol_pct :min 0 :max 100 :round-digits 0
-           :timeout "2s"
-           :onchange "eww update vol_pct={} && ~/.config/eww/scripts/controls.sh set-volume {}")
-    (box :class "islider-icon" :halign "start" :valign "center"
-         :style "background-image: url('${vol_icon}');")))
+  (slider-panel :title "Sound" :icon vol_icon :value vol_pct
+                :onchange "eww-state volume set {}"))
 
 (defwidget bri-slider []
-  (overlay :class "islider ${theme}"
-    (scale :class "islider-input" :hexpand true :value bri_pct :min 1 :max 100 :round-digits 0
-           :timeout "2s"        ;; see the vol-slider note above
-           :onchange "eww update bri_pct={} && ~/.config/eww/scripts/controls.sh set-brightness {}")
-    (box :class "islider-icon" :halign "start" :valign "center"
-         :style "background-image: url('${bri_icon}');")))
+  (slider-panel :title "Display" :icon bri_icon :value bri_pct
+                :onchange "eww-state brightness set {}"))
 
 (defwindow volume-menu
-  :monitor 0 :geometry (geometry :anchor "top right" :x "8px" :y "4px" :width "260px")
+  ;; 8 / 4 / 298 pt x 1.25. The Sound panel measures the same 298 wide as the
+  ;; Wi-Fi and Bluetooth ones — panel edges at x 12 and 310 in sound-panel.png.
+  :monitor 0 :geometry (geometry :anchor "top right" :x "10px" :y "5px" :width "373px")
   :stacking "overlay" :focusable false
   (vol-slider))
 
 (defwindow brightness-menu
-  :monitor 0 :geometry (geometry :anchor "top right" :x "8px" :y "4px" :width "260px")
+  ;; 8 / 4 / 298 pt x 1.25. The Sound panel measures the same 298 wide as the
+  ;; Wi-Fi and Bluetooth ones — panel edges at x 12 and 310 in sound-panel.png.
+  :monitor 0 :geometry (geometry :anchor "top right" :x "10px" :y "5px" :width "373px")
   :stacking "overlay" :focusable false
   (bri-slider))
 
-;; screenshot.sh (bound to Print) captures a slurp region with grim, then opens
-;; this menu with Copy / Save actions. Same pattern as the Wi-Fi and BT menus but
-;; with its own open var and backdrop, outside the `menu` state machine, since a
-;; keybind popup should neither close nor be closed by a bar dropdown. The shot is
-;; a background-image box sized by the script to the captured aspect ratio, so it
-;; clips to rounded corners without distorting.
-(defvar shot_open false)
+;; `eww-state shot capture` (bound to Print) runs the region select and stages
+;; the result, then opens this menu with Copy / Save / Discard. Its own open var
+;; and backdrop, outside the `menu` group, since a keybind popup should neither
+;; close nor be closed by a bar dropdown. The shot is a background-image box
+;; sized by the daemon to the captured aspect ratio, so it clips to rounded
+;; corners without distorting.
 (defvar shot_path "")
 (defvar shot_w 320)
 (defvar shot_h 200)
@@ -235,16 +348,16 @@
     (box :class "shot-preview" :halign "center"
          :style "background-image: url('${shot_path}'); min-width: ${shot_w}px; min-height: ${shot_h}px;")
     (box :class "shot-actions" :space-evenly true :spacing 8
-      (button :class "shot-btn" :onclick "setsid -f ~/.config/eww/scripts/shot-action.sh copy"
+      (button :class "shot-btn" :onclick "eww-state shot copy"
         (label :text "Copy"))
-      (button :class "shot-btn" :onclick "setsid -f ~/.config/eww/scripts/shot-action.sh save"
+      (button :class "shot-btn" :onclick "eww-state shot save"
         (label :text "Save"))
-      (button :class "shot-btn" :onclick "setsid -f ~/.config/eww/scripts/shot-action.sh discard"
+      (button :class "shot-btn" :onclick "eww-state shot discard"
         (label :text "Discard")))))
 
 (defwindow shot-menu
   :monitor 0
-  :geometry (geometry :anchor "top right" :x "8px" :y "4px")
+  :geometry (geometry :anchor "top right" :x "10px" :y "5px")   ;; 8 / 4 pt x 1.25
   :stacking "overlay"
   :focusable false
   (shot-panel))
@@ -257,15 +370,16 @@
   :stacking "overlay"
   :focusable false
   :namespace "eww-backdrop"
-  (button :class "backdrop" :onclick "setsid -f ~/.config/eww/scripts/shot-action.sh close"
+  (button :class "backdrop" :onclick "eww-state shot close"
           :hexpand true :vexpand true))
 
 ;; :exclusive true reserves the 24px strip so windows sit below the bar rather
-;; than under it. Visibility itself is tracked by sync-bars.sh via
-;; `eww active-windows`, not by this reserved area.
+;; than under it. Whether it is shown at all is the daemon's call: it watches the
+;; compositor and hides bar and dock together on a fullscreen Space.
 (defwindow bar
   :monitor 0
-  :geometry (geometry :x "0px" :y "0px" :width "100%" :height "24px" :anchor "top center")
+  :geometry (geometry :x "0px" :y "0px" :width "100%"
+                      :height "30px" :anchor "top center")   ;; 24pt x 1.25
   :stacking "overlay"
   :exclusive true
   :focusable false
