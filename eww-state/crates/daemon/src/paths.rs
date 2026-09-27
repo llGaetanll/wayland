@@ -45,7 +45,7 @@ impl Paths {
             run_dir: run.clone(),
             dock_conf: config.join("eww-state/dock.conf"),
             shots: run.join("eww-shots"),
-            screenshots: home.join("Pictures/Screenshots"),
+            screenshots: home.join("files/images/screenshots"),
             log: state.join("eww-state/eww-state.log"),
         }
     }
