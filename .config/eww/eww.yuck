@@ -14,34 +14,28 @@
 
 ;; One dock slot: the eventbox makes it both draggable and a drop target, so
 ;; dropping app {} here swaps the two. A plain click falls through to the button.
-;; The tile and the running dot are stacked, because macOS puts the dot under
-;; the icon rather than on it, and the slab is tall enough to hold both.
-(defwidget applaunch [id icon running]
+(defwidget applaunch [id icon]
   (eventbox :class "dock-slot" :dragvalue id :dragtype "values"
             :ondropped "eww-state dock swap {} ${id}"
     ;; No `setsid -f` anywhere in this file any more. Every handler is one
     ;; connect-write-read on a unix socket and returns in well under eww's
     ;; 200ms :timeout, which is what used to truncate the shell handlers
     ;; mid-way and leave the state lying about what was on screen.
-    (box :orientation "vertical" :space-evenly false :halign "center"
-      (button :class "dock-btn" :onclick "eww-state dock launch ${id}"
-        ;; Fixed-size cell with the icon centred, so nothing a tile does can
-        ;; move its neighbours.
-        (box :class "dock-cell" :halign "center" :valign "center"
-          (box :class "dock-icon" :halign "center" :valign "center"
-               :style "background-image: url('${icon}');")))
-      (box :class "dock-dot ${running ? 'on' : 'off'}" :halign "center"))))
+    (button :class "dock-btn" :onclick "eww-state dock launch ${id}"
+      ;; Fixed-size cell with the icon centred, so nothing a tile does can
+      ;; move its neighbours.
+      (box :class "dock-cell" :halign "center" :valign "center"
+        (box :class "dock-icon" :halign "center" :valign "center"
+             :style "background-image: url('${icon}');")))))
 
 ;; The Trash is not in dock.conf: in macOS it is not a dock app you can reorder
 ;; or remove, it is a fixture at the end past the separator. Modelling it as one
 ;; would make it draggable and let the user drop another app onto it.
 (defwidget trash []
-  (box :orientation "vertical" :space-evenly false :halign "center"
-    (button :class "dock-btn" :onclick "eww-state dock launch trash"
-      (box :class "dock-cell" :halign "center" :valign "center"
-        (box :class "dock-icon" :halign "center" :valign "center"
-             :style "background-image: url('/home/al/.config/eww/icons/apps/trash.png');")))
-    (box :class "dock-dot off" :halign "center")))
+  (button :class "dock-btn" :onclick "eww-state dock launch trash"
+    (box :class "dock-cell" :halign "center" :valign "center"
+      (box :class "dock-icon" :halign "center" :valign "center"
+           :style "background-image: url('/home/al/.config/eww/icons/apps/trash.png');"))))
 
 ;; Windows put away in the dock. macOS keeps these past the separator, to the
 ;; right of every app and in the order they were minimized, and draws the window
@@ -51,23 +45,19 @@
 (defvar dock_minimized "[]")
 
 (defwidget minimized [addr thumb icon title width]
-  (box :orientation "vertical" :space-evenly false :halign "center"
-    ;; The one window command that names a window: a minimized one is not the
-    ;; focused window and, being off screen entirely, never can be.
-    (button :class "dock-btn" :tooltip title
-            :onclick "eww-state window restore ${addr}"
-      ;; Sized by the daemon, not the stylesheet: a tile is as wide as the
-      ;; window was, drawn at the tile height, and GTK sizes a box long before
-      ;; it knows anything about the image about to be painted into it.
-      (box :class "dock-cell" :halign "center" :valign "center"
-           :style "min-width: ${width}px;"
-        (box :class "dock-thumb" :halign "center" :valign "center"
-             :style "background-image: url('${thumb}'); min-width: ${width}px;"
-          (box :class "dock-badge" :halign "end" :valign "end"
-               :style "background-image: url('${icon}');"))))
-    ;; No dot: the app's own tile already carries one, because a window that is
-    ;; minimized is still a window the app has open.
-    (box :class "dock-dot off" :halign "center")))
+  ;; The one window command that names a window: a minimized one is not the
+  ;; focused window and, being off screen entirely, never can be.
+  (button :class "dock-btn" :tooltip title
+          :onclick "eww-state window restore ${addr}"
+    ;; Sized by the daemon, not the stylesheet: a tile is as wide as the
+    ;; window was, drawn at the tile height, and GTK sizes a box long before
+    ;; it knows anything about the image about to be painted into it.
+    (box :class "dock-cell" :halign "center" :valign "center"
+         :style "min-width: ${width}px;"
+      (box :class "dock-thumb" :halign "center" :valign "center"
+           :style "background-image: url('${thumb}'); min-width: ${width}px;"
+        (box :class "dock-badge" :halign "end" :valign "end"
+             :style "background-image: url('${icon}');")))))
 
 (defwidget dock []
   ;; The `for` lives in its own box on purpose. eww appends the widgets a `for`
@@ -79,7 +69,7 @@
   (box :class "dock ${theme}" :space-evenly false :valign "center" :spacing 0
     (box :class "dock-apps" :space-evenly false :spacing 0
       (for a in {dock_apps}
-        (applaunch :id {a.id} :icon {a.icon} :running {a.running})))
+        (applaunch :id {a.id} :icon {a.icon})))
     (box :class "dock-sep")
     ;; Its own box for the same reason the app loop has one.
     (box :class "dock-minimized" :space-evenly false :spacing 0

@@ -7,13 +7,13 @@
 .background { background-color: transparent; }
 
 // Every number in this block is measured off desktop/full-desktop.png and
-// recorded in ~/macos-match/targets.json. The slab is 567 x 43 points, centred,
-// sitting 5 points off the bottom of the screen, and the tiles are on an exact
-// 34 point grid — the running dots repeat on that same grid, which is what
-// confirms it. Nothing here is a round number chosen because it looked right.
+// recorded in ~/macos-match/targets.json. The slab is centred, sitting 5 points
+// off the bottom of the screen, and the tiles are on an exact 34 point grid.
+// The padding is deliberately uniform: no running dots any more, so the tiles
+// are the only thing in the slab and they sit dead centre in it.
 .dock {
   border-radius: 10px * $ui-scale;      // corner profile off the right edge gives r 8-10
-  padding: 2px * $ui-scale 4px * $ui-scale 1px 4px * $ui-scale; // 3.5pt measured across, and GTK wants whole pixels
+  padding: 4px * $ui-scale;
 }
 
 // One tile, and the 34pt grid itself: the cell is exactly one pitch wide, so
@@ -66,24 +66,12 @@
   background-size: contain;
 }
 
-// The running indicator. macOS puts a small dot under every app that has a
-// window, on the icon grid, in the strip below the tiles.
-.dock-dot {
-  min-width: 4px * $ui-scale;
-  min-height: 4px * $ui-scale;
-  border-radius: 2px * $ui-scale;
-  margin-top: 2px * $ui-scale;
-  background-color: transparent;
-}
-.dock.dark  .dock-dot.on { background-color: rgba(255, 255, 255, 0.65); }
-.dock.light .dock-dot.on { background-color: rgba(0, 0, 0, 0.45); }
-
 // The hairline between apps and the Trash. 2pt wide and 18.5pt tall in the
 // capture, sitting in its own gap rather than tight against either neighbour.
 .dock-sep {
   min-width: 1px;
   min-height: 19px * $ui-scale;
-  margin: 0 11px * $ui-scale 5px * $ui-scale 11px * $ui-scale;
+  margin: 0 11px * $ui-scale;
 }
 .dock.dark  .dock-sep { background-color: rgba(255, 255, 255, 0.22); }
 .dock.light .dock-sep { background-color: rgba(0, 0, 0, 0.18); }
