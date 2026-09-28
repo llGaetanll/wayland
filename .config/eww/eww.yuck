@@ -477,7 +477,15 @@ EWWQ
 ;; hyprland.lua takes Escape and the arrows while letters carry on reaching here.
 (defwindow search
   :monitor 0
-  :geometry (geometry :anchor "center" :x "0px" :y "-140px" :width "640px")
+  ;; Anchored to the top, not centred, and that is the whole reason the field
+  ;; holds still. A centred window grows in both directions as results arrive,
+  ;; so the entry slid up the screen by ~186px between an empty list and a full
+  ;; one and the text you were typing moved out from under the cursor. Anchored
+  ;; here the top edge is fixed and the list grows downward off it.
+  ;;
+  ;; 330px puts the field where the centred panel used to sit with about four
+  ;; results — the common case — so the usual view is unchanged.
+  :geometry (geometry :anchor "top center" :x "0px" :y "330px" :width "640px")
   :stacking "overlay"
   :focusable true
   :namespace "eww-search"
