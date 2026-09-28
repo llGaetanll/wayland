@@ -34,6 +34,37 @@ hl.bind(mod .. " + ALT + equal", hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%+"
 hl.bind(mod .. " + ALT + plus",  hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%+"), { locked = true, repeating = true })
 hl.bind(mod .. " + ALT + minus", hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%-"), { locked = true, repeating = true })
 
+-- Laptop function row. The keys arrive as ordinary XF86 keysyms on the
+-- hid-sdw:...-consumer-control keyboard, so they are bound by keysym and the
+-- physical order of the row does not matter. Everything here is `locked` so it
+-- keeps working over the lockscreen.
+local media = { locked = true }
+local media_ramp = { locked = true, repeating = true }
+
+hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"), media_ramp)
+hl.bind("XF86AudioLowerVolume", hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"),      media_ramp)
+hl.bind("XF86AudioMute",        hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"),     media)
+
+-- The Dell privacy driver already cuts the mic in hardware; this keeps the
+-- PipeWire source in step so apps see the same state.
+hl.bind("XF86AudioMicMute", hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"), media)
+
+hl.bind("XF86MonBrightnessUp",   hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%+"), media_ramp)
+hl.bind("XF86MonBrightnessDown", hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%-"), media_ramp)
+
+-- Keyboard backlight is a 3-step LED (0/1/2) that cycles on one key. Writing it
+-- needs the `input` group; without that these two are no-ops.
+hl.bind("XF86KbdBrightnessUp",   hl.dsp.exec_cmd("brightnessctl -d dell::kbd_backlight set +1"), media)
+hl.bind("XF86KbdBrightnessDown", hl.dsp.exec_cmd("brightnessctl -d dell::kbd_backlight set 1-"), media)
+hl.bind("XF86KbdLightOnOff",     hl.dsp.exec_cmd("sh -c 'brightnessctl -d dell::kbd_backlight set +1 || brightnessctl -d dell::kbd_backlight set 0'"), media)
+
+-- Playback keys go to whichever player has the MPRIS focus.
+hl.bind("XF86AudioPlay",  hl.dsp.exec_cmd("playerctl play-pause"), media)
+hl.bind("XF86AudioPause", hl.dsp.exec_cmd("playerctl play-pause"), media)
+hl.bind("XF86AudioStop",  hl.dsp.exec_cmd("playerctl stop"),       media)
+hl.bind("XF86AudioNext",  hl.dsp.exec_cmd("playerctl next"),       media)
+hl.bind("XF86AudioPrev",  hl.dsp.exec_cmd("playerctl previous"),   media)
+
 -- Screenshot: slurp region-select → grim → eww preview menu with Copy/Save.
 -- eww-state runs the capture and stages the result; a second press while the
 -- selector is up is dropped by its state machine rather than by a lock file.
