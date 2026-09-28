@@ -466,6 +466,7 @@
 (defvar search_hits "[]")
 (defvar search_h 0)
 (defvar search_none false)
+(defvar search_empty true)
 
 ;; The two handlers that carry typed text, and the reason they look like this.
 ;;
@@ -487,8 +488,18 @@
 ;; that follows it race; the text on the Return is what settles it.
 (defwidget search-panel []
   (box :class "menu search ${theme}" :orientation "vertical" :space-evenly false
+    ;; eww's `input` has no placeholder property — not in 0.6.0, and not
+    ;; upstream either — so the prompt is a dimmed label laid over the empty
+    ;; field. The entry is the overlay's first child, so it is what decides the
+    ;; size; a label has no window of its own, so clicks still reach the entry
+    ;; through it.
+    ;;
+    ;; It hides on `search_empty`, which is the daemon's word for it and so
+    ;; arrives a round trip after the keystroke that emptied the field. For
+    ;; ~30ms the first character typed is drawn over the prompt.
     (box :class "search-field"
-      (input :class "search-input" :hexpand true
+      (overlay
+        (input :class "search-input" :hexpand true
              :onchange "eww-state search query \"$(cat <<'EWWQ'
 {}
 EWWQ
@@ -496,7 +507,9 @@ EWWQ
              :onaccept "eww-state search accept \"$(cat <<'EWWQ'
 {}
 EWWQ
-)\""))
+)\"")
+        (label :class "search-prompt" :text "System Search"
+               :halign "start" :valign "center" :visible search_empty)))
     (box :class "sep" :visible {search_h > 0 || search_none})
     (box :class "search-list" :orientation "vertical" :space-evenly false
          :visible {search_h > 0}

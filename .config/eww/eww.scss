@@ -539,3 +539,13 @@
   .menu.light & { color: rgba(0, 0, 0, 0.45); }
   .menu.dark  & { color: rgba(255, 255, 255, 0.45); }
 }
+
+// The prompt laid over an empty field. Same font and size as the entry so it
+// sits exactly where the first character will, and dimmed to rofi's
+// placeholder colour — it is a hint, not content.
+.search-prompt {
+  font-family: "Inter", sans-serif;
+  font-size: 20px;
+  .menu.light & { color: rgba(0, 0, 0, 0.35); }
+  .menu.dark  & { color: rgba(235, 235, 235, 0.45); }
+}
