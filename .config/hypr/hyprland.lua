@@ -237,7 +237,15 @@ end
 
 
 -- The Lua config has a permission model; without this, plugins are denied.
+-- hyprbars is a local fork (~/files/github/hyprland-plugins, branch macos-buttons)
+-- that can rasterize an SVG file into a button instead of drawing a text glyph;
+-- it is loaded straight from its build dir, so hyprpm is not in the picture.
+-- scripts/hyprbars-build.sh owns it: --auto rebuilds at login whenever the .so
+-- was built against another Hyprland, --update pulls upstream's pinned commit and
+-- re-applies patches/hyprbars-svg-icons.patch on top.
 hl.permission("/usr/(bin|local/bin)/hyprpm", "plugin", "allow")
+hl.permission("/home/al/files/github/hyprland-plugins/.*", "plugin", "allow")
+hl.permission("/home/al/files/github/blur/.*", "plugin", "allow")
 
 
 -- Title bars (hyprbars), mac-style. add_button() only appends, and the list is
@@ -275,9 +283,9 @@ if hl.plugin and hl.plugin.hyprbars ~= nil then
     -- Yellow does too, and for a related reason: there is no minimize in
     -- Hyprland, so it is a move onto a workspace nothing draws, and only
     -- eww-state knows where the window came from or has a dock to put it in.
-    hl.plugin.hyprbars.add_button({ bg_color = "rgb(ff5f57)", fg_color = "rgb(2e2e2e)", size = 11, icon = "×", action = "eww-state window close" })
-    hl.plugin.hyprbars.add_button({ bg_color = "rgb(febc2e)", fg_color = "rgb(2e2e2e)", size = 11, icon = "−", action = "eww-state window minimize" })
-    hl.plugin.hyprbars.add_button({ bg_color = "rgb(28c840)", fg_color = "rgb(2e2e2e)", size = 11, icon = "+", action = [[hyprctl dispatch "hl.dsp.window.fullscreen({ mode = 'maximized' })"]] })
+    hl.plugin.hyprbars.add_button({ bg_color = "rgb(ff5f57)", fg_color = "rgb(4d0000)", size = 13, icon = "/home/al/.config/hypr/icons/close.svg", action = "eww-state window close" })
+    hl.plugin.hyprbars.add_button({ bg_color = "rgb(febc2e)", fg_color = "rgb(995700)", size = 13, icon = "/home/al/.config/hypr/icons/minimize.svg", action = "eww-state window minimize" })
+    hl.plugin.hyprbars.add_button({ bg_color = "rgb(28c840)", fg_color = "rgb(006500)", size = 13, icon = "/home/al/.config/hypr/icons/maximize.svg", action = [[hyprctl dispatch "hl.dsp.window.fullscreen({ mode = 'maximized' })"]] })
 
     -- Title bars are opt-in: a catch-all rule hides them, then these apps get one
     -- back (most apps draw their own chrome). Works because `no_bar` is a
@@ -314,7 +322,7 @@ else
     -- First login: plugins aren't loaded yet, so load hyprbars, poll until it
     -- registers, then reload so the block above runs with the plugin present.
     hl.on("hyprland.start", function()
-        hl.exec_cmd("hyprpm reload -n")
+        hl.exec_cmd("/home/al/.config/hypr/scripts/hyprbars-build.sh --auto --load")
         local tries = 0
         local poll
         poll = hl.timer(function()

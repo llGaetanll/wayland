@@ -1,0 +1,51 @@
+diff --git a/hyprbars/barDeco.cpp b/hyprbars/barDeco.cpp
+index c27653d..72aaf64 100644
+--- a/hyprbars/barDeco.cpp
++++ b/hyprbars/barDeco.cpp
+@@ -11,6 +11,7 @@
+ #include <hyprland/src/managers/SeatManager.hpp>
+ #include <hyprland/src/managers/input/InputManager.hpp>
+ #include <hyprland/src/render/Renderer.hpp>
++#include <hyprgraphics/image/Image.hpp>
+ #include <hyprland/src/config/ConfigManager.hpp>
+ #include <hyprland/src/config/shared/animation/AnimationTree.hpp>
+ #include <hyprland/src/config/shared/parserUtils/ParserUtils.hpp>
+@@ -376,6 +377,10 @@ void CHyprBar::renderBarButtons(CBox* barBox, const float scale, const float a)
+     }
+ }
+ 
++static bool buttonIconIsImage(const SHyprButton& button) {
++    return button.icon.ends_with(".svg") || button.icon.ends_with(".png");
++}
++
+ void CHyprBar::renderBarButtonsText(CBox* barBox, const float scale, const float a) {
+     const auto HEIGHT           = g_pGlobalState->config.barHeight->value();
+     const auto BARBUTTONPADDING = g_pGlobalState->config.barButtonPadding->value();
+@@ -402,10 +407,23 @@ void CHyprBar::renderBarButtonsText(CBox* barBox, const float scale, const float
+         noScaleOffset += BARBUTTONPADDING + button.size;
+ 
+         if ((!button.iconTex || button.iconTex->m_texID == 0) && !button.icon.empty()) {
+-            // render icon
+-            auto fgcol = button.userfg ? button.fgcol : (button.bgcol.r + button.bgcol.g + button.bgcol.b < 1) ? CHyprColor(0xFFFFFFFF) : CHyprColor(0xFF000000);
+-
+-            button.iconTex = g_pHyprRenderer->renderText(button.icon, fgcol, std::round(button.size * 0.62 * scale), false, "sans", scaledButtonSize);
++            // render icon. An icon naming an image file is rasterized to exactly the button
++            // box, so it sits dead center; anything else is text, drawn with the font.
++            if (buttonIconIsImage(button)) {
++                const auto           SIDE = std::round(scaledButtonSize);
++                Hyprgraphics::CImage image(button.icon, Vector2D{SIDE, SIDE});
++
++                if (image.success() && image.cairoSurface())
++                    button.iconTex = g_pHyprRenderer->createTexture(image.cairoSurface()->cairo());
++                else {
++                    Log::logger->log(Log::ERR, "[hyprbars] could not load button icon {}: {}", button.icon, image.getError());
++                    button.icon = "";
++                }
++            } else {
++                auto fgcol = button.userfg ? button.fgcol : (button.bgcol.r + button.bgcol.g + button.bgcol.b < 1) ? CHyprColor(0xFFFFFFFF) : CHyprColor(0xFF000000);
++
++                button.iconTex = g_pHyprRenderer->renderText(button.icon, fgcol, std::round(button.size * 0.62 * scale), false, "sans", scaledButtonSize);
++            }
+         }
+ 
+         if (!button.iconTex || button.iconTex->m_texID == 0)
