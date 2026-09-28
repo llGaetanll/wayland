@@ -9,6 +9,7 @@
 //! that would have said why.
 
 use std::io;
+use std::io::Read;
 use std::process::Command;
 use std::process::Stdio;
 
@@ -35,20 +36,53 @@ pub fn out(program: &str, args: &[&str]) -> Option<String> {
 
 /// Run a command for its effect. Returns whether it succeeded.
 pub fn ok(program: &str, args: &[&str]) -> bool {
-    match Command::new(program)
+    let spawned = Command::new(program)
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .output()
-    {
-        Ok(o) => {
-            log_stderr(program, args, &o.stderr);
-            o.status.success()
-        }
+        .stderr(Stdio::piped())
+        .spawn();
+    let mut child = match spawned {
+        Ok(c) => c,
         Err(e) => {
             tracing::warn!(program, ?args, error = %e, "could not run");
+            return false;
+        }
+    };
+    // Reading stderr here would wait for every process holding it to let go,
+    // and an eww client that cannot reach a server forks itself into one that
+    // keeps the stderr it was given. That fork outlives the client by the rest
+    // of the session, so the pipe is drained on a thread of its own and only
+    // the client itself is waited for.
+    if let Some(stderr) = child.stderr.take() {
+        drain(program, args, stderr);
+    }
+    match child.wait() {
+        Ok(status) => status.success(),
+        Err(e) => {
+            tracing::warn!(program, ?args, error = %e, "could not wait for");
             false
         }
+    }
+}
+
+/// Log what a command says on stderr, on a thread, whenever it finishes saying
+/// it. Nothing waits for this.
+fn drain(program: &str, args: &[&str], mut stderr: std::process::ChildStderr) {
+    let program = program.to_string();
+    let args: Vec<String> = args.iter().map(|a| a.to_string()).collect();
+    let spawned = std::thread::Builder::new()
+        .name("stderr".into())
+        .spawn(move || {
+            let mut said = Vec::new();
+            if stderr.read_to_end(&mut said).is_err() {
+                return;
+            }
+            let args: Vec<&str> = args.iter().map(String::as_str).collect();
+            log_stderr(&program, &args, &said);
+        });
+    if let Err(e) = spawned {
+        tracing::warn!(error = %e, "could not read a command's stderr");
     }
 }
 
