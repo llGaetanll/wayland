@@ -43,6 +43,10 @@ pub fn perform(action: &ActionShot, places: &Places) -> Vec<EventShot> {
         ActionShot::Save { path } => {
             let name = exec::out("date", &[&places.saved_format])
                 .unwrap_or_else(|| "Screenshot.png".into());
+            // The directory is made once at startup, which is not a promise
+            // that it is still there: losing a shot to a renamed folder is the
+            // one outcome this button must never have.
+            let _ = std::fs::create_dir_all(&places.saved);
             if let Err(e) = std::fs::copy(path, places.saved.join(name)) {
                 tracing::error!(error = %e, "could not save the screenshot");
             }
@@ -136,6 +140,37 @@ fn parse_geometry(geom: &str) -> Option<(u32, u32, u32, u32)> {
 #[cfg(test)]
 mod tests {
     use super::parse_geometry;
+    use super::perform;
+    use super::Places;
+    use crate::action::ActionShot;
+
+    #[test]
+    fn saving_works_when_the_destination_is_gone() {
+        let dir = std::env::temp_dir().join("eww-state-shot-save");
+        let _ = std::fs::remove_dir_all(&dir);
+        let staged = dir.join("staged.png");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(&staged, b"not really a png").unwrap();
+
+        // The directory the daemon made at startup can be renamed or removed
+        // while it runs; a shot must not be lost because of that.
+        let saved = dir.join("gone/Screenshots");
+        let places = Places {
+            staging: dir.clone(),
+            saved: saved.clone(),
+            accent: "0a84ff".into(),
+            saved_format: "+Screenshot.png".into(),
+        };
+        perform(
+            &ActionShot::Save {
+                path: staged.to_string_lossy().into_owned(),
+            },
+            &places,
+        );
+
+        assert!(saved.join("Screenshot.png").is_file());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn slurp_geometry() {
