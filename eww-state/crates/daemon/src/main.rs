@@ -32,6 +32,9 @@ eww-state — widget state daemon
   eww-state bt toggle | bt connect <mac-base64>
   eww-state dock launch <id> | dock swap <a> <b>
   eww-state shot capture | shot <copy|save|discard|close>
+  eww-state search open | search close
+  eww-state search query <text> | search accept <text>
+  eww-state search move <-1|1> | search launch <command-base64>
   eww-state window close        close the focused window, leaving its Space first
   eww-state window minimize     put the focused window away in the dock
   eww-state window restore <address>

@@ -10,6 +10,7 @@ use module_battery::EventBattery;
 use module_bluetooth::EventBluetooth;
 use module_date::EventDate;
 use module_dock::EventDock;
+use module_search::EventSearch;
 use module_shot::EventShot;
 use module_spaces::EventSpaces;
 use module_theme::EventTheme;
@@ -29,6 +30,7 @@ pub enum Event {
     Bluetooth(EventBluetooth),
     Date(EventDate),
     Dock(EventDock),
+    Search(EventSearch),
     Shot(EventShot),
     Spaces(EventSpaces),
     Theme(EventTheme),

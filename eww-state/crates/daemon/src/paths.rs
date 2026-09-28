@@ -20,6 +20,10 @@ pub struct Paths {
     pub thumbs: PathBuf,
     /// Where "Save" puts a screenshot.
     pub screenshots: PathBuf,
+    /// `.desktop` directories, most specific first.
+    pub app_dirs: Vec<PathBuf>,
+    /// Icon themes the launcher searches, in preference order.
+    pub icon_dirs: Vec<PathBuf>,
     /// The rotating log, under the platform's state directory rather than the
     /// cache: a log someone is about to send us is not disposable.
     pub log: PathBuf,
@@ -38,6 +42,7 @@ impl Paths {
         let cache = env_path("XDG_CACHE_HOME").unwrap_or_else(|| home.join(".cache"));
         let state = env_path("XDG_STATE_HOME").unwrap_or_else(|| home.join(".local/state"));
         let run = env_path("XDG_RUNTIME_DIR").unwrap_or_else(|| PathBuf::from("/tmp"));
+        let data = env_path("XDG_DATA_HOME").unwrap_or_else(|| home.join(".local/share"));
 
         Paths {
             eww_config: config.join("eww"),
@@ -49,6 +54,8 @@ impl Paths {
             shots: run.join("eww-shots"),
             thumbs: run.join("eww-minimized"),
             screenshots: home.join("files/images/screenshots"),
+            app_dirs: app_dirs(&home, &data),
+            icon_dirs: icon_dirs(&home),
             log: state.join("eww-state/eww-state.log"),
         }
     }
@@ -69,6 +76,52 @@ impl Paths {
     pub fn str(p: &std::path::Path) -> String {
         p.to_string_lossy().into_owned()
     }
+}
+
+/// Where `.desktop` files live, in the order the spec searches them: a user's
+/// own copy of an entry hides the packaged one rather than appearing beside it.
+fn app_dirs(home: &std::path::Path, data: &std::path::Path) -> Vec<PathBuf> {
+    let mut dirs = vec![data.join("applications")];
+    let extra = std::env::var("XDG_DATA_DIRS").unwrap_or_default();
+    let extra: Vec<&str> = extra.split(':').filter(|s| !s.is_empty()).collect();
+    let extra = if extra.is_empty() {
+        vec!["/usr/local/share", "/usr/share"]
+    } else {
+        extra
+    };
+    dirs.extend(
+        extra
+            .into_iter()
+            .map(|d| PathBuf::from(d).join("applications")),
+    );
+    dirs.push(home.join(".local/share/flatpak/exports/share/applications"));
+    dirs
+}
+
+/// Icon themes to search, best first.
+///
+/// WhiteSur ahead of the freedesktop fallbacks on purpose: it is the theme the
+/// rest of the desktop draws (see the GTK portal setting), and a launcher
+/// showing a different picture of Firefox than the dock does is worse than a
+/// slightly blurry one.
+///
+/// KEEP IN SYNC with the icon theme in `gsettings get org.gnome.desktop.interface
+/// icon-theme`; nothing here reads it, because a theme that is not installed is
+/// simply a directory that does not exist and is skipped.
+fn icon_dirs(home: &std::path::Path) -> Vec<PathBuf> {
+    let mut dirs = vec![home.join(".local/share/icons/WhiteSur-light")];
+    dirs.extend(
+        [
+            "/usr/share/icons/WhiteSur-light",
+            "/usr/share/icons/WhiteSur",
+            "/usr/share/icons/hicolor",
+            "/usr/share/icons/Adwaita",
+            "/usr/share/pixmaps",
+        ]
+        .into_iter()
+        .map(PathBuf::from),
+    );
+    dirs
 }
 
 /// Empty a staging directory of the files a previous run left in it.

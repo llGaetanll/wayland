@@ -9,6 +9,7 @@ use module_battery::ConfigBattery;
 use module_bluetooth::ConfigBluetooth;
 use module_date::ConfigDate;
 use module_dock::ConfigDock;
+use module_search::ConfigSearch;
 use module_shot::ConfigShot;
 use module_spaces::ConfigSpaces;
 use module_theme::ConfigTheme;
@@ -45,6 +46,7 @@ pub struct ConfigBar {
     pub bluetooth: ConfigBluetooth,
     pub date: ConfigDate,
     pub dock: ConfigDock,
+    pub search: ConfigSearch,
     pub shot: ConfigShot,
     pub spaces: ConfigSpaces,
     pub theme: ConfigTheme,

@@ -24,6 +24,7 @@ dependencies = [
  "module-bluetooth",
  "module-date",
  "module-dock",
+ "module-search",
  "module-shot",
  "module-spaces",
  "module-theme",
@@ -66,6 +67,7 @@ dependencies = [
  "module-bluetooth",
  "module-date",
  "module-dock",
+ "module-search",
  "module-shot",
  "module-spaces",
  "module-theme",
@@ -99,6 +101,15 @@ dependencies = [
 
 [[package]]
 name = "module-dock"
+version = "0.1.0"
+dependencies = [
+ "api-core",
+ "tracing",
+ "util-exec",
+]
+
+[[package]]
+name = "module-search"
 version = "0.1.0"
 dependencies = [
  "api-core",

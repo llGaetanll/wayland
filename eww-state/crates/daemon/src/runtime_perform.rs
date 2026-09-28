@@ -13,6 +13,8 @@ use crate::paths::Paths;
 /// The bits of the environment a module's IO needs and cannot discover.
 pub struct Places {
     pub wifi: module_wifi::perform::Prompt,
+    pub search: module_search::perform::Places,
+    pub search_cfg: module_search::ConfigSearch,
     pub shot: module_shot::perform::Places,
     pub cache: std::path::PathBuf,
     pub dock_conf: std::path::PathBuf,
@@ -32,6 +34,12 @@ impl Places {
                         .unwrap_or_default()
                 ),
             },
+            search: module_search::perform::Places {
+                app_dirs: paths.app_dirs.clone(),
+                icon_dirs: paths.icon_dirs.clone(),
+                cache: paths.cache.clone(),
+            },
+            search_cfg: module_search::ConfigSearch::default(),
             shot: module_shot::perform::Places {
                 staging: paths.shots.clone(),
                 saved: paths.screenshots.clone(),
@@ -74,6 +82,10 @@ pub fn perform(action: &Action, places: &Places) -> Vec<Event> {
         Action::Dock(a) => module_dock::perform::perform(a, &places.dock_conf)
             .into_iter()
             .map(Event::Dock)
+            .collect(),
+        Action::Search(a) => module_search::perform::perform(a, &places.search, &places.search_cfg)
+            .into_iter()
+            .map(Event::Search)
             .collect(),
         Action::Shot(a) => module_shot::perform::perform(a, &places.shot)
             .into_iter()

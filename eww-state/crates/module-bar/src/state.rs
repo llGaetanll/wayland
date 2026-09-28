@@ -24,6 +24,7 @@ use module_bluetooth::EventBluetooth;
 use module_bluetooth::StateBluetooth;
 use module_date::StateDate;
 use module_dock::StateDock;
+use module_search::StateSearch;
 use module_shot::EventShot;
 use module_shot::StateShot;
 use module_spaces::StateSpaces;
@@ -102,6 +103,7 @@ pub struct StateBar {
     bluetooth: StateBluetooth,
     date: StateDate,
     dock: StateDock,
+    search: StateSearch,
     shot: StateShot,
     spaces: StateSpaces,
     theme: StateTheme,
@@ -123,6 +125,7 @@ impl StateBar {
             bluetooth: StateBluetooth::new(cfg.bluetooth),
             date: StateDate::new(cfg.date),
             dock: StateDock::new(cfg.dock),
+            search: StateSearch::new(cfg.search),
             shot: StateShot::new(cfg.shot),
             spaces: StateSpaces::new(cfg.spaces),
             theme: StateTheme::new(cfg.theme),
@@ -232,6 +235,7 @@ impl StateBar {
         self.bluetooth.vars(&mut v);
         self.date.vars(&mut v);
         self.dock.vars(&mut v);
+        self.search.vars(&mut v);
         self.shot.vars(&mut v);
         self.spaces.vars(&mut v);
         self.theme.vars(&mut v);
@@ -263,6 +267,10 @@ impl StateBar {
         if self.shot.is_open() {
             w.insert(Window::Shot);
             w.insert(Window::ShotBackdrop);
+        }
+        if self.search.is_open() {
+            w.insert(Window::Search);
+            w.insert(Window::SearchBackdrop);
         }
         w
     }
@@ -297,6 +305,7 @@ impl StateBar {
             Event::Bluetooth(e) => self.bluetooth.handle_event(e),
             Event::Date(e) => self.date.handle_event(e),
             Event::Dock(e) => self.dock.handle_event(e),
+            Event::Search(e) => self.search.handle_event(e),
             Event::Shot(e) => self.shot.handle_event(e),
             Event::Spaces(e) => self.spaces.handle_event(e),
             Event::Theme(e) => self.theme.handle_event(e),
@@ -409,6 +418,7 @@ impl StateBar {
         emit!(bluetooth, Action::Bluetooth);
         emit!(date, Action::Date);
         emit!(dock, Action::Dock);
+        emit!(search, Action::Search);
         emit!(shot, Action::Shot);
         emit!(spaces, Action::Spaces);
         emit!(theme, Action::Theme);

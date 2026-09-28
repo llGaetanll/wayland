@@ -23,6 +23,10 @@ pub enum Window {
     /// click outside the preview leaves an open bar menu alone.
     ShotBackdrop,
     Shot,
+    /// The launcher's own click-catcher, separate for the same reason the
+    /// screenshot preview's is.
+    SearchBackdrop,
+    Search,
 }
 
 impl Window {
@@ -34,6 +38,8 @@ impl Window {
             Window::MenuBackdrop => "menu-backdrop".into(),
             Window::Shot => "shot-menu".into(),
             Window::ShotBackdrop => "shot-backdrop".into(),
+            Window::Search => "search".into(),
+            Window::SearchBackdrop => "search-backdrop".into(),
         }
     }
 
@@ -45,6 +51,8 @@ impl Window {
         v.extend(MenuId::ALL.into_iter().map(Window::Menu));
         v.push(Window::Shot);
         v.push(Window::ShotBackdrop);
+        v.push(Window::Search);
+        v.push(Window::SearchBackdrop);
         v
     }
 }

@@ -32,6 +32,8 @@ use module_bluetooth::EventBluetooth;
 use module_date::EventDate;
 use module_dock::DockApp;
 use module_dock::EventDock;
+use module_search::App;
+use module_search::EventSearch;
 use module_shot::EventShot;
 use module_shot::Shot;
 use module_spaces::ActionSpaces;
@@ -95,6 +97,11 @@ pub struct World {
     pub hold: bool,
     /// The capture the user is currently dragging out a region for.
     capturing: Option<api::JobId>,
+    /// What a scan of the applications directories would find.
+    pub apps: Vec<App>,
+    /// Which compositor submap the fake compositor is in, so a test can see
+    /// the launcher take the arrow keys and give them back.
+    pub submap: bool,
 
     /// Everything that actually happened, in order.
     pub log: Vec<String>,
@@ -123,6 +130,8 @@ impl World {
             held: Vec::new(),
             hold: false,
             capturing: None,
+            apps: Vec::new(),
+            submap: false,
             log: Vec::new(),
         }
     }
@@ -244,6 +253,7 @@ impl World {
                 text: "Mon Aug 12  14:30".into(),
             })],
             Action::Dock(a) => self.dock_action(a),
+            Action::Search(a) => self.search(a),
             Action::Shot(a) => self.shot(a),
             Action::Theme(_) => vec![Event::Theme(EventTheme::Observed { theme: Theme::Dark })],
             Action::Wifi(a) => self.wifi(a),
@@ -503,6 +513,25 @@ impl World {
         }
     }
 
+    /// A scan answers immediately: there is no user holding anything up, and
+    /// the directories it would read are this field.
+    fn search(&mut self, action: module_search::ActionSearch) -> Vec<Event> {
+        use module_search::ActionSearch;
+        match action {
+            ActionSearch::Index { id } => vec![
+                Event::Search(EventSearch::Indexed {
+                    apps: self.apps.clone(),
+                }),
+                Event::Search(EventSearch::Finished { id }),
+            ],
+            ActionSearch::Launch { .. } => Vec::new(),
+            ActionSearch::Keys { grabbed } => {
+                self.submap = grabbed;
+                Vec::new()
+            }
+        }
+    }
+
     fn shot(&mut self, action: module_shot::ActionShot) -> Vec<Event> {
         use module_shot::ActionShot;
         match action {
@@ -610,6 +639,7 @@ impl World {
 fn describe(action: &Action) -> String {
     use module_bluetooth::ActionBluetooth as Bt;
     use module_dock::ActionDock as Dock;
+    use module_search::ActionSearch as Search;
     use module_shot::ActionShot as Shot;
     use module_spaces::ActionSpaces as Spaces;
     use module_wifi::ActionWifi as Wifi;
@@ -630,6 +660,9 @@ fn describe(action: &Action) -> String {
                 .join(",")
         ),
         Action::Dock(a) => format!("dock {a:?}"),
+        Action::Search(Search::Launch { exec }) => format!("launch {exec}"),
+        Action::Search(Search::Index { .. }) => "index-apps".into(),
+        Action::Search(Search::Keys { grabbed }) => format!("search-keys {grabbed}"),
         Action::Shot(Shot::Capture { .. }) => "shot-capture".into(),
         Action::Shot(Shot::Save { path }) => format!("shot-save {path}"),
         Action::Shot(a) => format!("shot {a:?}"),

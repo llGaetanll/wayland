@@ -12,6 +12,7 @@ members = [
     "crates/module-date",
     "crates/module-theme",
     "crates/module-dock",
+    "crates/module-search",
     "crates/module-shot",
     "crates/module-spaces",
     "crates/module-bar",

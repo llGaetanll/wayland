@@ -11,6 +11,7 @@ module-battery = { path = "../module-battery" }
 module-bluetooth = { path = "../module-bluetooth" }
 module-date = { path = "../module-date" }
 module-dock = { path = "../module-dock" }
+module-search = { path = "../module-search" }
 module-shot = { path = "../module-shot" }
 module-spaces = { path = "../module-spaces" }
 module-theme = { path = "../module-theme" }

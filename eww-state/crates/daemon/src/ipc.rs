@@ -19,6 +19,7 @@ use module_bar::Event;
 use module_bar::EventBar;
 use module_bar::MenuId;
 use module_bar::ModuleId;
+use module_search::EventSearch;
 use module_shot::EventShot;
 use module_shot::ShotAction;
 use module_spaces::EventSpaces;
@@ -68,6 +69,27 @@ pub fn parse(args: &[&str]) -> Result<Cmd, String> {
                 percent,
             }))
         }),
+
+        // The typed text arrives raw rather than encoded, because eww pastes
+        // a widget's value straight into a shell command line with no quoting
+        // of any kind. What protects it is on the eww side — a quoted heredoc,
+        // see `search-panel` in eww.yuck — and by the time it reaches here it
+        // is one argv element and one tab-separated field.
+        ["search", "open"] => Ok(ev(Event::Search(EventSearch::Toggled))),
+        ["search", "close"] => Ok(ev(Event::Search(EventSearch::Dismissed))),
+        ["search", "query", text] => Ok(ev(Event::Search(EventSearch::Queried {
+            text: (*text).to_string(),
+        }))),
+        ["search", "accept", text] => Ok(ev(Event::Search(EventSearch::Accepted {
+            text: (*text).to_string(),
+        }))),
+        ["search", "move", delta] => delta
+            .parse()
+            .map(|delta| ev(Event::Search(EventSearch::Moved { delta })))
+            .map_err(|_| format!("not a step: {delta}")),
+        ["search", "launch", exec_b64] => Ok(ev(Event::Search(EventSearch::Picked {
+            exec: decode(exec_b64)?,
+        }))),
 
         ["wifi", "toggle"] => Ok(ev(Event::Wifi(module_wifi::EventWifi::Toggled))),
         ["wifi", "rescan"] => Ok(ev(ModuleId::Wifi.due())),

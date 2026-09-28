@@ -12,6 +12,7 @@ use module_battery::ActionBattery;
 use module_bluetooth::ActionBluetooth;
 use module_date::ActionDate;
 use module_dock::ActionDock;
+use module_search::ActionSearch;
 use module_shot::ActionShot;
 use module_spaces::ActionSpaces;
 use module_theme::ActionTheme;
@@ -28,6 +29,7 @@ pub enum Action {
     Bluetooth(ActionBluetooth),
     Date(ActionDate),
     Dock(ActionDock),
+    Search(ActionSearch),
     Shot(ActionShot),
     Spaces(ActionSpaces),
     Theme(ActionTheme),
