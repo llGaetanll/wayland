@@ -327,6 +327,10 @@
 // `margin` on a box wrapping the overlay: GtkOverlay hands its children its
 // whole area, and GtkBox ignores its own CSS padding when allocating a child,
 // so padding on either of them left the track running edge to edge.
+// The Output list hangs off the slider, so its separator needs the gap the
+// slider's own bottom margin does not give it.
+.out-sep { margin-top: 8px * $ui-scale; }
+
 .islider { margin: 0 14px * $ui-scale 4px * $ui-scale 14px * $ui-scale; }
 
 .islider-input {
