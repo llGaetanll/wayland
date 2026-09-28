@@ -172,6 +172,11 @@ hl.window_rule({ name = "firefox-size", match = { class = "[Ff]irefox" }, size =
 -- A 1px hairline around every window, the same trick the eww menus use: a
 -- translucent white edge rather than a drawn colour, dimmer when unfocused.
 -- Edges stay grabbable well beyond it via extend_border_grab_area.
+-- A window filling the screen has no edge to draw: the hairline would trace the
+-- screen border and the rounding would cut the wallpaper in at the corners.
+-- Matched on state rather than on a class, so it follows the window in and out.
+hl.window_rule({ name = "fullscreen-no-chrome", match = { fullscreen = true }, border_size = 0, rounding = 0 })
+
 hl.config({ general = {
   resize_on_border = true,
   extend_border_grab_area = 15,
