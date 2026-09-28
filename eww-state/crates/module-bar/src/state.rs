@@ -101,6 +101,7 @@ impl StateBar {
             date: StateDate::new(cfg.date),
             dock: StateDock::new(cfg.dock),
             shot: StateShot::new(cfg.shot),
+            spaces: StateSpaces::new(cfg.spaces),
             theme: StateTheme::new(cfg.theme),
             wifi: StateWifi::new(cfg.wifi),
             icons_root: cfg.icons_root,
@@ -127,6 +128,22 @@ impl StateBar {
         self.battery.set_dark(mode == Theme::Dark);
     }
 
+    /// Let the placement module see the dock's apps, so a minimized window's
+    /// tile can be badged with the icon of the app it belongs to.
+    ///
+    /// The dock's list is the dock's own; this hands down a copy rather than
+    /// letting one module read into another, which is the only direction
+    /// anything here is allowed to speak in.
+    fn follow_dock(&mut self) {
+        let icons = self
+            .dock
+            .apps()
+            .iter()
+            .map(|a| (a.id.clone(), a.icon.clone()))
+            .collect();
+        self.spaces.set_app_icons(icons);
+    }
+
     /// Apply a batch of events. This is the only way state changes, and it
     /// emits nothing: what the batch adds up to is not known until it is over.
     pub fn handle_events(&mut self, events: &[Event]) {
@@ -134,6 +151,7 @@ impl StateBar {
             self.handle_event(event);
         }
         self.follow_theme();
+        self.follow_dock();
     }
 
     /// Say what has to happen now, given everything the batch left behind.
@@ -192,6 +210,7 @@ impl StateBar {
         self.date.vars(&mut v);
         self.dock.vars(&mut v);
         self.shot.vars(&mut v);
+        self.spaces.vars(&mut v);
         self.theme.vars(&mut v);
         self.wifi.vars(&mut v);
         v.set("menu", self.menu.map(|m| m.as_str()).unwrap_or(""));

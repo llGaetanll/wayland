@@ -10,6 +10,7 @@ use module_bluetooth::ConfigBluetooth;
 use module_date::ConfigDate;
 use module_dock::ConfigDock;
 use module_shot::ConfigShot;
+use module_spaces::ConfigSpaces;
 use module_theme::ConfigTheme;
 use module_wifi::ConfigWifi;
 
@@ -45,16 +46,23 @@ pub struct ConfigBar {
     pub date: ConfigDate,
     pub dock: ConfigDock,
     pub shot: ConfigShot,
+    pub spaces: ConfigSpaces,
     pub theme: ConfigTheme,
     pub wifi: ConfigWifi,
 }
 
 impl ConfigBar {
     /// The usual arrangement: icons in one directory, generated assets in
-    /// another, everything else at its default.
-    pub fn new(icons_dir: &str, cache_dir: &str) -> ConfigBar {
+    /// another, staged window thumbnails in a third, everything else at its
+    /// default.
+    pub fn new(icons_dir: &str, cache_dir: &str, thumbs_dir: &str) -> ConfigBar {
         ConfigBar {
             icons_root: icons_dir.to_string(),
+            spaces: ConfigSpaces {
+                thumbs: thumbs_dir.to_string(),
+                tile_height: scaled(ConfigSpaces::default().tile_height),
+                ..Default::default()
+            },
             audio: ConfigAudio {
                 icons_dir: format!("{icons_dir}/light"),
                 ..Default::default()

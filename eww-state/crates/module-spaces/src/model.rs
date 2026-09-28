@@ -44,11 +44,29 @@ impl std::fmt::Display for WorkspaceId {
     }
 }
 
+/// A window's place on the screen, in compositor pixels.
+///
+/// The client area only: a title bar the compositor draws itself sits above
+/// `y`, so a thumbnail taken from this shows the window's contents without its
+/// chrome — which is what macOS shows too.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Rect {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+}
+
 /// One window, as much of it as any rule here cares about.
 #[derive(Clone, Debug)]
 pub struct Client {
     pub addr: WindowAddr,
     pub workspace: WorkspaceId,
+    /// What the compositor calls the workspace. Never interpreted, with one
+    /// exception: the workspace minimized windows are kept on is ours, and is
+    /// recognised by name because the compositor assigns special workspaces an
+    /// id we cannot predict.
+    pub workspace_name: String,
     /// The compositor reports a mode, not a flag — maximized and fullscreen are
     /// different numbers. Both count: either one is the user asking for the
     /// window to fill the screen, which is what a Space is for.
@@ -57,6 +75,38 @@ pub struct Client {
     /// a rule that comes to need it should have to say so, rather than inherit
     /// an assumption nobody wrote down.
     pub monitor: i32,
+    pub geometry: Rect,
+    pub class: String,
+    pub title: String,
+}
+
+/// One window put away in the dock.
+///
+/// Everything here is copied off the window at the moment it was minimized,
+/// because none of it can be asked for afterwards: a hidden window's geometry
+/// is the compositor's business, and its title is out of date the moment it
+/// stops being drawn. The tile shows what the window looked like when it left,
+/// which is exactly what macOS shows.
+#[derive(Clone, Debug)]
+pub struct Minimized {
+    pub addr: WindowAddr,
+    /// The workspace it came from, and goes back to.
+    pub home: WorkspaceId,
+    pub title: String,
+    /// Where the capture of the window is, and whether it has got there yet.
+    /// Published only once it has: see
+    /// [`EventSpaces::Captured`](crate::event::EventSpaces::Captured).
+    pub thumb: String,
+    pub captured: bool,
+    /// How wide to draw the tile, at the dock's tile height. The window's
+    /// aspect ratio, in other words, which the widget cannot work out for
+    /// itself: GTK sizes a box before it knows anything about the image it is
+    /// about to paint into it.
+    pub width: u32,
+    /// The dock icon of the app it belongs to, badged on the thumbnail.
+    /// Empty when the app is not in the dock, which the widget draws as no
+    /// badge rather than as a missing image.
+    pub icon: String,
 }
 
 /// Everything one look at the compositor found.
@@ -90,6 +140,9 @@ pub enum MoveTarget {
     /// Back where it came from. Emptying the Space is what makes the compositor
     /// destroy it.
     Workspace(WorkspaceId),
+    /// Out of sight. Named rather than numbered: it is a special workspace, and
+    /// the compositor picks those an id we never see coming.
+    Hidden(String),
 }
 
 #[cfg(test)]

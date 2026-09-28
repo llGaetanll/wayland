@@ -22,6 +22,7 @@ use module_bar::ModuleId;
 use module_shot::EventShot;
 use module_shot::ShotAction;
 use module_spaces::EventSpaces;
+use module_spaces::WindowAddr;
 
 use crate::paths::Paths;
 use crate::runtime_daemon::Msg;
@@ -95,6 +96,12 @@ pub fn parse(args: &[&str]) -> Result<Cmd, String> {
         // a window in a fullscreen Space has to be left behind before it is
         // closed, and only the Spaces module knows whether it is in one.
         ["window", "close"] => Ok(ev(Event::Spaces(EventSpaces::CloseRequested))),
+        ["window", "minimize"] => Ok(ev(Event::Spaces(EventSpaces::MinimizeRequested))),
+        // The only window command that names one: a minimized window is not the
+        // focused window and, being off screen entirely, never can be.
+        ["window", "restore", addr] => WindowAddr::parse(addr)
+            .map(|addr| ev(Event::Spaces(EventSpaces::RestoreRequested { addr })))
+            .ok_or_else(|| format!("not a window address: {addr}")),
 
         ["shot", "capture"] => Ok(ev(Event::Shot(EventShot::Requested))),
         ["shot", action] => ShotAction::parse(action)

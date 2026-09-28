@@ -8,6 +8,7 @@ use api::JobId;
 
 use crate::event::EventSpaces;
 use crate::model::Client;
+use crate::model::Rect;
 use crate::model::Snapshot;
 use crate::model::WindowAddr;
 use crate::model::WorkspaceId;
@@ -44,8 +45,12 @@ fn parse_clients(out: &str) -> Vec<Client> {
             current = addr.map(|addr| Client {
                 addr,
                 workspace: WorkspaceId::default(),
+                workspace_name: String::new(),
                 fullscreen: false,
                 monitor: 0,
+                geometry: Rect::default(),
+                class: String::new(),
+                title: String::new(),
             });
             continue;
         }
@@ -56,24 +61,50 @@ fn parse_clients(out: &str) -> Vec<Client> {
             continue;
         };
         let value = value.trim();
-        // `workspace: 2 (name)` — the id is the first field, the name is the
-        // user's and we never interpret it.
+        // `workspace: 2 (name)` — the id is the first field, the name is in
+        // the brackets after it.
         let first = value.split_whitespace().next().unwrap_or(value);
         match key {
             "workspace" => {
                 if let Ok(id) = first.parse() {
                     client.workspace = WorkspaceId(id);
                 }
+                client.workspace_name = bracketed(value).to_string();
             }
             // A mode, not a flag: 0 is neither maximized nor fullscreen, and
             // every other value is the user asking to fill the screen.
             "fullscreen" => client.fullscreen = first != "0",
             "monitor" => client.monitor = first.parse().unwrap_or(0),
+            "at" => (client.geometry.x, client.geometry.y) = pair(value),
+            "size" => (client.geometry.width, client.geometry.height) = pair(value),
+            "class" => client.class = value.to_string(),
+            // Matched on the key rather than taken from the `Window … -> title`
+            // header, which truncates and has no delimiter a title cannot
+            // contain. `initialTitle` is a different key and does not land here.
+            "title" => client.title = value.to_string(),
             _ => {}
         }
     }
     clients.extend(current);
     clients
+}
+
+/// The contents of the last pair of brackets on a line, or nothing.
+fn bracketed(value: &str) -> &str {
+    value
+        .split_once('(')
+        .and_then(|(_, rest)| rest.rsplit_once(')'))
+        .map(|(inside, _)| inside)
+        .unwrap_or_default()
+}
+
+/// A `x,y` pair of coordinates. Anything else is the origin, which for a window
+/// the compositor has not placed yet is also the truth.
+fn pair(value: &str) -> (i32, i32) {
+    let Some((a, b)) = value.split_once(',') else {
+        return (0, 0);
+    };
+    (a.trim().parse().unwrap_or(0), b.trim().parse().unwrap_or(0))
 }
 
 /// `hyprctl activeworkspace` names the focused workspace and its last focused
@@ -108,16 +139,21 @@ mod tests {
     const CLIENTS: &str = "\
 Window 558156ab0980 -> 1:eww-state:
 \tat: 0,26
+\tsize: 1920,1174
 \tworkspace: 2 (2)
 \tmonitor: 0
 \tclass: Alacritty
+\ttitle: 1:eww-state
 \tfullscreen: 1
 \tfullscreenClient: 1
 
 Window 5581569f1230 -> Firefox:
-\tworkspace: 1 (1)
+\tat: 210,125
+\tsize: 1500,950
+\tworkspace: -98 (special:minimized)
 \tmonitor: 0
 \tclass: firefox
+\ttitle: Mozilla Firefox
 \tfullscreen: 0
 ";
 
@@ -128,11 +164,33 @@ Window 5581569f1230 -> Firefox:
         assert_eq!(clients[0].addr.as_str(), "0x558156ab0980");
         assert_eq!(clients[0].workspace.0, 2);
         assert!(clients[0].fullscreen);
-        assert_eq!(clients[1].workspace.0, 1);
+        assert_eq!(clients[0].geometry.width, 1920);
+        assert_eq!(clients[1].workspace.0, -98);
         assert!(
             !clients[1].fullscreen,
             "an ordinary window is not in a Space"
         );
+    }
+
+    /// A special workspace is recognised by name, because its id is whatever
+    /// the compositor felt like assigning.
+    #[test]
+    fn a_workspace_says_what_it_is_called() {
+        let clients = parse_clients(CLIENTS);
+        assert_eq!(clients[0].workspace_name, "2");
+        assert_eq!(clients[1].workspace_name, "special:minimized");
+    }
+
+    /// Everything a thumbnail is cropped to, and the title the tile shows.
+    #[test]
+    fn a_window_says_where_it_is_and_what_it_is() {
+        let firefox = &parse_clients(CLIENTS)[1];
+        assert_eq!(firefox.geometry.x, 210);
+        assert_eq!(firefox.geometry.y, 125);
+        assert_eq!(firefox.geometry.width, 1500);
+        assert_eq!(firefox.geometry.height, 950);
+        assert_eq!(firefox.class, "firefox");
+        assert_eq!(firefox.title, "Mozilla Firefox", "not the header's copy");
     }
 
     /// Maximized and fullscreen are different modes and both mean the window

@@ -16,6 +16,8 @@ pub struct Paths {
     pub dock_conf: PathBuf,
     /// Staging area for captured screenshots.
     pub shots: PathBuf,
+    /// Staging area for the thumbnails of minimized windows.
+    pub thumbs: PathBuf,
     /// Where "Save" puts a screenshot.
     pub screenshots: PathBuf,
     /// The rotating log, under the platform's state directory rather than the
@@ -45,15 +47,20 @@ impl Paths {
             run_dir: run.clone(),
             dock_conf: config.join("eww-state/dock.conf"),
             shots: run.join("eww-shots"),
+            thumbs: run.join("eww-minimized"),
             screenshots: home.join("files/images/screenshots"),
             log: state.join("eww-state/eww-state.log"),
         }
     }
 
     pub fn ensure_dirs(&self) {
-        for d in [&self.cache, &self.shots, &self.screenshots] {
+        for d in [&self.cache, &self.shots, &self.screenshots, &self.thumbs] {
             let _ = std::fs::create_dir_all(d);
         }
+        // Nothing here outlives the daemon that made it: a thumbnail is only
+        // ever shown for a window the running machine remembers minimizing, and
+        // it does not remember across a restart.
+        reap(&self.thumbs);
         if let Some(parent) = self.dock_conf.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
@@ -61,5 +68,17 @@ impl Paths {
 
     pub fn str(p: &std::path::Path) -> String {
         p.to_string_lossy().into_owned()
+    }
+}
+
+/// Empty a staging directory of the files a previous run left in it.
+fn reap(dir: &std::path::Path) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for e in entries.flatten() {
+        if e.path().extension().is_some_and(|x| x == "png") {
+            let _ = std::fs::remove_file(e.path());
+        }
     }
 }

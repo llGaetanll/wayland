@@ -71,6 +71,7 @@ impl RuntimeDaemon {
         let mut state = StateBar::new(ConfigBar::new(
             &Paths::str(&paths.icons),
             &Paths::str(&paths.cache),
+            &Paths::str(&paths.thumbs),
         ));
         let runtime = Arc::new(RuntimeDaemon {
             places: Places::new(

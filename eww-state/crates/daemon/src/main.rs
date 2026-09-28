@@ -33,6 +33,8 @@ eww-state — widget state daemon
   eww-state dock launch <id> | dock swap <a> <b>
   eww-state shot capture | shot <copy|save|discard|close>
   eww-state window close        close the focused window, leaving its Space first
+  eww-state window minimize     put the focused window away in the dock
+  eww-state window restore <address>
   eww-state refresh <probe>
 
   eww-state dump | vars | windows | polls | ping

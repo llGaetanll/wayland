@@ -36,6 +36,7 @@ use module_spaces::ActionSpaces;
 use module_spaces::Client;
 use module_spaces::EventSpaces;
 use module_spaces::MoveTarget;
+use module_spaces::Rect;
 use module_spaces::Snapshot;
 use module_spaces::WindowAddr;
 use module_spaces::WorkspaceId;
@@ -43,6 +44,11 @@ use module_theme::EventTheme;
 use module_theme::Theme;
 use module_wifi::EventWifi;
 use module_wifi::NetSnapshot;
+
+/// The workspace the compositor puts minimized windows on. A special workspace
+/// in reality, and its id is the compositor's to pick; the number here only has
+/// to be one no ordinary workspace uses.
+const HIDDEN: WorkspaceId = WorkspaceId(-98);
 
 pub struct World {
     pub bar: StateBar,
@@ -72,6 +78,9 @@ pub struct World {
     /// The compositor's windows, and which workspace is being looked at.
     clients: Vec<Client>,
     focused: WorkspaceId,
+    /// The thumbnails staged for minimized windows, so a test can see one
+    /// taken and dropped again.
+    thumbs: Vec<String>,
 
     /// Joining a network fails until this is cleared.
     pub wifi_fails: bool,
@@ -88,7 +97,7 @@ pub struct World {
 impl World {
     pub fn new() -> World {
         World {
-            bar: StateBar::new(ConfigBar::new("/icons", "/cache")),
+            bar: StateBar::new(ConfigBar::new("/icons", "/cache", "/thumbs")),
             now: Millis::default(),
             volume: 50,
             muted: false,
@@ -102,6 +111,7 @@ impl World {
             eww_starts: true,
             clients: Vec::new(),
             focused: WorkspaceId(1),
+            thumbs: Vec::new(),
             wifi_fails: false,
             held: Vec::new(),
             hold: false,
@@ -244,16 +254,18 @@ impl World {
                 ]
             }
             ActionSpaces::Move { id, addr, to } => {
-                let to = match to {
-                    MoveTarget::Empty => self.empty_workspace(),
-                    MoveTarget::Workspace(w) => w,
-                };
-                for c in &mut self.clients {
-                    if c.addr == addr {
-                        c.workspace = to;
-                    }
-                }
-                self.focused = to;
+                self.move_window(&addr, to);
+                vec![Event::Spaces(EventSpaces::Finished { id })]
+            }
+            ActionSpaces::Minimize {
+                id,
+                addr,
+                thumb,
+                to,
+                ..
+            } => {
+                self.thumbs.push(thumb);
+                self.move_window(&addr, to);
                 vec![Event::Spaces(EventSpaces::Finished { id })]
             }
             ActionSpaces::Focus { workspace } => {
@@ -264,6 +276,33 @@ impl World {
                 self.clients.retain(|c| c.addr != addr);
                 Vec::new()
             }
+            ActionSpaces::Forget { thumb } => {
+                self.thumbs.retain(|t| t != &thumb);
+                Vec::new()
+            }
+        }
+    }
+
+    /// Carry out a move, and let the window take the focus with it the way
+    /// `follow = true` does — except into the hidden workspace, which is the
+    /// one destination nothing follows a window to.
+    fn move_window(&mut self, addr: &WindowAddr, to: MoveTarget) {
+        let (workspace, name) = match to {
+            MoveTarget::Empty => {
+                let w = self.empty_workspace();
+                (w, w.to_string())
+            }
+            MoveTarget::Workspace(w) => (w, w.to_string()),
+            MoveTarget::Hidden(name) => (HIDDEN, name),
+        };
+        for c in &mut self.clients {
+            if &c.addr == addr {
+                c.workspace = workspace;
+                c.workspace_name = name.clone();
+            }
+        }
+        if workspace != HIDDEN {
+            self.focused = workspace;
         }
     }
 
@@ -281,8 +320,17 @@ impl World {
         self.clients.push(Client {
             addr: WindowAddr::parse(addr).expect("an address"),
             workspace: self.focused,
+            workspace_name: self.focused.to_string(),
             fullscreen: false,
             monitor: 0,
+            geometry: Rect {
+                x: 0,
+                y: 0,
+                width: 800,
+                height: 600,
+            },
+            class: "firefox".to_string(),
+            title: "Mozilla Firefox".to_string(),
         });
         self.compositor_moved()
     }
