@@ -185,7 +185,7 @@
         (button :class "row" :onclick "eww-state wifi connect ${n.ssid_b64}"
           (box :space-evenly false :spacing 9 :valign "center"
             (box :class "row-mark on" :valign "center" :halign "center"
-              (box :class "row-glyph"
+              (box :class "row-glyph" :halign "center" :valign "center"
                    :style "background-image: url('${n.icon_on}');"))
             (label :class "row-name" :text {n.ssid} :halign "start" :hexpand true
                    :limit-width 24 :show-truncated true)
@@ -206,7 +206,7 @@
                 ;; glyph; the rest show the bare signal glyph.
                 (box :class "row-mark ${n.active ? 'on' : 'off'}" :valign "center"
                      :halign "center"
-                  (box :class "row-glyph"
+                  (box :class "row-glyph" :halign "center" :valign "center"
                        :style "background-image: url('${n.active ? n.icon_on : n.icon}');"))
                 (label :class "row-name" :text {n.ssid} :halign "start" :hexpand true
                        :limit-width 24 :show-truncated true)
@@ -273,7 +273,8 @@
                 ;; read yet.
                 (box :class "row-mark disc ${d.connected ? 'on' : 'off'}" :valign "center"
                      :halign "center"
-                  (box :class "row-glyph" :style "background-image: url('${d.icon}');"))
+                  (box :class "row-glyph" :halign "center" :valign "center"
+                       :style "background-image: url('${d.icon}');"))
                 (label :class "row-name" :text {d.name} :halign "start" :hexpand true
                        :limit-width 26 :show-truncated true)
                 (label :class "row-connecting" :text "Connecting…"

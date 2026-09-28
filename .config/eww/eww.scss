@@ -280,6 +280,10 @@
   .menu.light & { background-color: rgba(0, 0, 0, 0.08); }
   .menu.dark  & { background-color: rgba(255, 255, 255, 0.18); }
 }
+// The box has to be centre-aligned in the yuck, not left to fill: a filling
+// child takes the whole 23pt circle, and `contain` then blows the 20x16 canvas
+// up to 28.75 wide — the glyph comes out oversized AND blurry, because a 1.15x
+// scale of an already-rasterised SVG lands on no pixel grid.
 .row-glyph {
   min-width: 20px * $ui-scale;          // the glyph canvas aspect — see .status-icon
   min-height: 16px * $ui-scale;
