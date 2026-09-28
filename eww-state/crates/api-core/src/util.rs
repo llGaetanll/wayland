@@ -33,9 +33,23 @@ pub fn b64(input: &str) -> String {
     out
 }
 
+/// Whether a short app id and a window class name the same app.
+///
+/// The two come from different registries and rarely agree letter for letter:
+/// `alacritty` vs `Alacritty`, `signal` vs `signal-desktop`. Case-folded
+/// containment either way is enough to tell apps apart from each other, and is
+/// wrong only for ids that are substrings of unrelated classes — which is why
+/// the id is the user's own short name and not a fragment.
+pub fn class_matches(id: &str, class: &str) -> bool {
+    let id = id.to_ascii_lowercase();
+    let class = class.to_ascii_lowercase();
+    id == class || class.contains(&id) || id.contains(&class)
+}
+
 #[cfg(test)]
 mod tests {
     use super::b64;
+    use super::class_matches;
 
     #[test]
     fn matches_reference_vectors() {
@@ -45,5 +59,13 @@ mod tests {
         assert_eq!(b64("foo"), "Zm9v");
         assert_eq!(b64("foobar"), "Zm9vYmFy");
         assert_eq!(b64("Café ✳"), "Q2Fmw6kg4pyz");
+    }
+
+    #[test]
+    fn an_id_and_a_class_can_name_the_same_app() {
+        assert!(class_matches("alacritty", "Alacritty"));
+        assert!(class_matches("signal", "signal-desktop"));
+        assert!(class_matches("firefox", "firefox"));
+        assert!(!class_matches("discord", "firefox"));
     }
 }

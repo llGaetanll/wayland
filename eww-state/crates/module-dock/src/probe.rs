@@ -2,6 +2,8 @@
 
 use std::path::Path;
 
+use api::util::class_matches;
+
 use crate::event::EventDock;
 use crate::model::DockApp;
 
@@ -27,19 +29,9 @@ fn running_ids(ids: &[String], clients: &str) -> Vec<String> {
         .filter(|c| !c.is_empty())
         .collect();
     ids.iter()
-        .filter(|id| classes.iter().any(|c| matches(id, c)))
+        .filter(|id| classes.iter().any(|c| class_matches(id, c)))
         .cloned()
         .collect()
-}
-
-/// A dock id and a window class name the same app in different registries:
-/// `alacritty` vs `Alacritty`, `signal` vs `signal-desktop`. Case-folded
-/// containment either way is enough to tell them apart from each other, and is
-/// wrong only for ids that are substrings of unrelated classes — which is why
-/// the id is the user's own short name and not a fragment.
-fn matches(id: &str, class: &str) -> bool {
-    let id = id.to_ascii_lowercase();
-    id == class || class.contains(&id) || id.contains(class)
 }
 
 /// `dock.conf` is `id<TAB>command<TAB>icon`, one app per line, in dock order.
