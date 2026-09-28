@@ -63,20 +63,23 @@ fn parse(text: &str, terminal: &str, icons: &IconIndex, places: &Places) -> Opti
         return None;
     }
     let name = get("Name");
-    let exec = strip_field_codes(get("Exec"));
-    if name.is_empty() || exec.is_empty() {
+    let command = strip_field_codes(get("Exec"));
+    if name.is_empty() || command.is_empty() {
         return None;
     }
+    // Searched on the bare command, launched with the terminal in front of it.
+    // Matching the runnable form would have put every terminal app in the
+    // results for "alac", since that is what all their command lines start with.
     let exec = if get("Terminal") == "true" {
-        format!("{terminal} {exec}")
+        format!("{terminal} {command}")
     } else {
-        exec
+        command.clone()
     };
     Some(App {
         name: name.to_string(),
         exec,
         icon: icons.resolve(get("Icon"), places),
-        keywords: format!("{} {}", get("GenericName"), get("Keywords")),
+        keywords: format!("{} {} {}", get("GenericName"), get("Keywords"), command),
     })
 }
 
@@ -272,8 +275,10 @@ fn rasterize(svg: &Path, places: &Places) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::desktop_entry;
+    use super::parse;
     use super::size_of;
     use super::strip_field_codes;
+    use super::IconIndex;
 
     #[test]
     fn field_codes_are_dropped_but_escaped_percents_are_not() {
@@ -312,6 +317,26 @@ Exec=firefox --new-window
         let f = desktop_entry(text);
         assert_eq!(f.get("Name").map(String::as_str), Some("Web Browser"));
         assert!(!f.contains_key("Name[de]"));
+    }
+
+    /// A terminal app is launched through the terminal but must not be found
+    /// by its name: searching "alac" once listed every terminal app there was.
+    #[test]
+    fn a_terminal_app_is_searched_by_its_own_command() {
+        let text = "[Desktop Entry]\nType=Application\nName=Vim\nExec=vim %F\nTerminal=true\n";
+        let icons = IconIndex(std::collections::BTreeMap::new());
+        let places = crate::perform::Places {
+            app_dirs: Vec::new(),
+            icon_dirs: Vec::new(),
+            cache: std::path::PathBuf::new(),
+        };
+        let app = parse(text, "alacritty -e", &icons, &places).expect("an application");
+        assert_eq!(app.exec, "alacritty -e vim", "but it is run through one");
+        assert!(app.keywords.contains("vim"));
+        assert!(
+            !app.keywords.contains("alacritty"),
+            "the terminal is not something this app is called"
+        );
     }
 
     #[test]

@@ -10,7 +10,9 @@ pub struct App {
     /// Absolute path to an icon file eww can draw, or empty when none was
     /// found. Always a PNG: this machine has no gdk-pixbuf SVG loader.
     pub icon: String,
-    /// `GenericName=` and `Keywords=` folded into one haystack. Matched but
-    /// never shown, so that typing "browser" finds Firefox.
+    /// `GenericName=`, `Keywords=` and the bare command, folded into one
+    /// haystack. Matched but never shown, so that typing "browser" finds
+    /// Firefox and "nemo" finds Files. The command here is the unwrapped
+    /// one, so searching for the terminal does not list every terminal app.
     pub keywords: String,
 }
