@@ -98,6 +98,10 @@
   :stacking "overlay"
   :exclusive false
   :focusable false
+  ;; Its own namespace so the Hyprland slide rule can reach the dock without
+  ;; also catching the menus, which share the default gtk-layer-shell one.
+  ;; KEEP IN SYNC with the layer rules in ~/.config/hypr/hyprland.lua.
+  :namespace "eww-dock"
   (dock))
 
 ;; Each status var is the path of the icon matching the current state, shown via
@@ -403,4 +407,6 @@
   :stacking "overlay"
   :exclusive true
   :focusable false
+  ;; See the dock: its own namespace so the slide rule can name it.
+  :namespace "eww-bar"
   (bar))

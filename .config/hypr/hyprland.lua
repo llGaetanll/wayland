@@ -19,10 +19,27 @@ hl.bind(mod .. " + Space", hl.dsp.exec_cmd("rofi -show drun"))
 -- makes the text visibly morph. Costs the open fade too.
 hl.layer_rule({ name = "rofi-blur", match = { namespace = "^rofi$" }, blur = true, ignore_alpha = 0.5, no_anim = true })
 
--- Blur eww surfaces (bar, dock, menus). The full-screen menu backdrop uses its
--- own "eww-backdrop" namespace to stay out of this — blurring a fullscreen
--- surface every frame near-locks the machine.
-hl.layer_rule({ name = "eww-blur", match = { namespace = "^gtk-layer-shell$" }, blur = true, ignore_alpha = 0.2 })
+-- Blur eww surfaces (bar, dock, menus). The menus sit on eww's default
+-- gtk-layer-shell namespace; bar and dock have their own so the slide rules
+-- below can name them, and both have to be listed here to keep their blur.
+-- The full-screen menu backdrop uses its own "eww-backdrop" namespace to stay
+-- out of this — blurring a fullscreen surface every frame near-locks the
+-- machine.
+-- KEEP IN SYNC with :namespace in ~/.config/eww/eww.yuck.
+hl.layer_rule({ name = "eww-blur", match = { namespace = "^(gtk-layer-shell|eww-bar|eww-dock)$" }, blur = true, ignore_alpha = 0.2 })
+
+-- Bar and dock slide off the edge they are anchored to when eww-state closes
+-- them for a fullscreen Space, and slide back in when it reopens them. Nothing
+-- in eww animates: the daemon still just opens and closes the surfaces, and
+-- the compositor animates the map/unmap. Directions are explicit rather than
+-- inferred from the anchor, so a geometry change cannot silently reverse one.
+hl.layer_rule({ name = "eww-bar-slide",  match = { namespace = "^eww-bar$" },  animation = "slide top" })
+hl.layer_rule({ name = "eww-dock-slide", match = { namespace = "^eww-dock$" }, animation = "slide bottom" })
+
+-- The menus keep the pop they have always had: the layers leaf below is what
+-- makes layer animation happen at all, and without this it would reach them too.
+hl.layer_rule({ name = "eww-menu-no-anim", match = { namespace = "^gtk-layer-shell$" }, no_anim = true })
+hl.layer_rule({ name = "eww-backdrop-no-anim", match = { namespace = "^eww-backdrop$" }, no_anim = true })
 
 -- Volume: SUPER +/-  (locked = works on lockscreen, repeating = holds to ramp)
 hl.bind(mod .. " + equal", hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"), { locked = true, repeating = true })
@@ -117,6 +134,17 @@ hl.animation({ leaf = "windows", enabled = true, speed = 3, bezier = "smooth", s
 hl.animation({ leaf = "windowsIn", enabled = true, speed = 3, bezier = "smooth", style = "popin 100%" })
 hl.animation({ leaf = "windowsOut", enabled = true, speed = 3, bezier = "smooth", style = "popin 100%" })
 hl.animation({ leaf = "fade", enabled = true, speed = 3, bezier = "smooth" })
+
+-- Layer surfaces are not animated by default (the leaf ships at speed 0). This
+-- is what gives the bar and dock their slide; which way each one goes is the
+-- per-namespace rules above. Slower than the windows leaf on purpose: macOS
+-- takes about 0.4s to hide the menu bar and Dock, and at speed 3 the slab is
+-- gone before the eye follows it.
+hl.animation({ leaf = "layers",    enabled = true, speed = 4, bezier = "smooth", style = "slide" })
+-- The in/out leaves are set explicitly rather than left to inherit: they each
+-- carry their own speed, and `hyprctl animations` reports them still at 0.
+hl.animation({ leaf = "layersIn",  enabled = true, speed = 4, bezier = "smooth", style = "slide" })
+hl.animation({ leaf = "layersOut", enabled = true, speed = 4, bezier = "smooth", style = "slide" })
 
 -- Fix Trackpad
 hl.config({
