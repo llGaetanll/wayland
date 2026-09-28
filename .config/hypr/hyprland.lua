@@ -141,9 +141,16 @@ hl.window_rule({ name = "float-all", match = { class = ".*" }, float = true })
 -- Floating windows with no saved geometry map at a tiny default size.
 hl.window_rule({ name = "firefox-size", match = { class = "[Ff]irefox" }, size = "1500 950", center = true })
 
--- border_size = 0 hides the active-window border; edges stay grabbable via
--- extend_border_grab_area.
-hl.config({ general = { resize_on_border = true, extend_border_grab_area = 15, border_size = 0 } })
+-- A 1px hairline around every window, the same trick the eww menus use: a
+-- translucent white edge rather than a drawn colour, dimmer when unfocused.
+-- Edges stay grabbable well beyond it via extend_border_grab_area.
+hl.config({ general = {
+  resize_on_border = true,
+  extend_border_grab_area = 15,
+  border_size = 1,
+  ["col.active_border"] = "rgba(ffffff33)",
+  ["col.inactive_border"] = "rgba(ffffff1a)",
+} })
 
 -- Blur applies to anything with alpha < 1 (e.g. alacritty). xray = false blurs
 -- the wallpaper behind a window rather than other windows.
@@ -187,7 +194,10 @@ hl.permission("/usr/(bin|local/bin)/hyprpm", "plugin", "allow")
 -- the else branch bootstraps them.
 if hl.plugin and hl.plugin.hyprbars ~= nil then
     hl.config({ plugin = { hyprbars = {
-        bar_height = 26,
+        bar_height = 28,
+        -- Put the bar inside the window border so the 1px hairline wraps the
+        -- title bar too, instead of stopping at the client area.
+        bar_precedence_over_border = true,
         -- Alpha d9 matches alacritty's opacity so the bar and body frost alike. A
         -- seamless join isn't possible: hyprbars always draws its own strip above
         -- the client area, so a faint seam remains.
