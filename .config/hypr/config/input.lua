@@ -22,11 +22,10 @@ hl.config({ input = {
 -- A 3-finger swipe slides between Spaces. scale is a delta multiplier: lower =
 -- more finger travel per switch.
 --
--- The guard does nothing on this version and is kept only as a tripwire: the
--- config body runs twice per reload, but each parse gets a fresh Lua state, so
--- this global is always nil when tested. Hyprland clears its own registration
--- lists between parses, which is what actually stops the gesture doubling.
-if not _G.__mac_spaces_init then
-    _G.__mac_spaces_init = true
-    hl.gesture({ fingers = 3, direction = "horizontal", action = "workspace", scale = 0.5 })
-end
+-- This used to be wrapped in a `_G.__mac_spaces_init` guard against the gesture
+-- registering twice. Measured on 0.56.2 (2026-09-28): the config body does run
+-- twice per reload, but each parse gets its own fresh Lua state, so the global
+-- was always nil when tested and the guard never did anything. Hyprland clears
+-- its own registration lists between parses, and `hyprctl binds` shows no
+-- duplicates. If a swipe ever jumps two Spaces again, this is where it starts.
+hl.gesture({ fingers = 3, direction = "horizontal", action = "workspace", scale = 0.5 })
