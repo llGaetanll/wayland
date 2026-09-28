@@ -466,5 +466,8 @@
 // #e7e7e7, not #ffffff: every glyph and the clock in menubar-full.png peaks at
 // luminance 231, which is macOS's dark-mode label colour. Pure white reads as
 // noticeably harder than the real thing next to it.
-.bar.light { background-color: $bar-light; color: #000000; }
-.bar.dark  { background-color: $bar-dark;  color: #e7e7e7; }
+// The hairline is bottom-only: the bar spans the full width with square
+// corners, so a full inset ring would draw a line down each screen edge too.
+// Same weight as the dock, the menus and the window border.
+.bar.light { background-color: $bar-light; color: #000000; box-shadow: inset 0 -1px 0 0 rgba(0, 0, 0, 0.12); }
+.bar.dark  { background-color: $bar-dark;  color: #e7e7e7; box-shadow: inset 0 -1px 0 0 rgba(255, 255, 255, 0.20); }
