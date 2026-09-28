@@ -418,7 +418,6 @@
   min-width: 38px * $ui-scale;
   min-height: 21px * $ui-scale;
   border-radius: 11px * $ui-scale;
-  padding: 1.5px;
   transition: background-color 150ms ease;
   &.on  { background-color: $accent; }
   &.off { background-color: rgba(120, 120, 128, 0.32); }
@@ -426,6 +425,10 @@
 .sw-knob {
   min-width: 18px * $ui-scale;
   min-height: 18px * $ui-scale;
+  // GTK3 floors a fractional margin to whole pixels, so 1.5 * 1.25 would land
+  // at 1px horizontally while the track's ceil'd min-height still left 2px above
+  // and below the knob. Round it so the inset is the same on all four sides.
+  margin: round(1.5px * $ui-scale);
   border-radius: 9px * $ui-scale;
   background-color: #ffffff;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
