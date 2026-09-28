@@ -182,6 +182,10 @@ impl Module for StateSearch {
             })
             .collect();
         out.set("search_hits", WireJson::Arr(rows));
+        // eww's `input` has no placeholder property — not in 0.6.0 and not
+        // upstream — so the prompt is a label the widget overlays on the empty
+        // field, and this is what tells it when to.
+        out.set("search_empty", self.query.is_empty());
         out.set("search_h", self.cfg.list_height(hits.len()));
         // Something was typed and nothing matched it, which is the one case
         // that wants a row saying so rather than a panel that just stops.
