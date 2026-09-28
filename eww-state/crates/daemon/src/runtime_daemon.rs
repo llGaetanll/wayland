@@ -242,10 +242,7 @@ fn perform_action_bar(action: &ActionBar, eww: &mut EwwCli, reconciler: &mut Rec
             }
         }
         ActionBar::EwwAdopt { server } => {
-            tracing::warn!(
-                ?server,
-                "publishing to an eww server we have not used before"
-            );
+            tracing::warn!(?server, "publishing to an eww holding none of our vars");
             // close-all before anything is published: a server we did not open
             // these on may still be holding windows from whoever did.
             reconciler.reset(eww);
@@ -253,7 +250,8 @@ fn perform_action_bar(action: &ActionBar, eww: &mut EwwCli, reconciler: &mut Rec
     }
 }
 
-/// Report what is listening at eww's socket, over and over.
+/// Report what is listening at eww's socket and what it is holding, over and
+/// over.
 ///
 /// The thread holds nothing and concludes nothing — it says what it saw and the
 /// machine decides what that means. It used to keep a `was_alive` of its own
@@ -267,8 +265,11 @@ fn probe_eww(paths: &Paths, tx: Sender<Msg>) {
         .name("eww-probe".into())
         .spawn(move || loop {
             let server = eww.probe();
+            // Only worth asking when something is listening, and asking costs
+            // a process: the stamp is read at the probe's pace, not the loop's.
+            let gen = server.and_then(|_| eww.read_gen());
             if tx
-                .send(Msg::Ev(Event::Bar(EventBar::EwwObserved { server })))
+                .send(Msg::Ev(Event::Bar(EventBar::EwwObserved { server, gen })))
                 .is_err()
             {
                 return;

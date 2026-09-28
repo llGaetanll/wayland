@@ -82,6 +82,10 @@ intervals. Nothing can drift, because nothing is remembered twice.
 - **An event we caused is not an event the user caused.** Moving a window makes
   the compositor re-emit the fullscreen it was moved for; the module knows the
   move is its own and does not answer its own echo.
+- **eww holding our variables is checked, not assumed.** The socket's inode
+  names the server, but `eww reload` empties every variable on the same inode.
+  The daemon stamps a generation into a var of eww's own and the probe reads it
+  back; a table not carrying the current stamp is published again from scratch.
 - **No job stays in flight forever.** A command that never returns — a killed
   daemon, a device that wandered off — is given up on after a timeout, so a
   switch cannot stay stuck mid-flip or a row read "Connecting…" all session.
@@ -96,8 +100,8 @@ cargo test
 bluetoothctl and the compositor, answers the actions the machine dispatches and
 lets a test assert on what the user would see. `scenarios.rs` replays the bugs
 the old setup had — menu mashing, a drag racing a poll, Print during an open
-dropdown, a fullscreen window bouncing between workspaces, eww restarting — with
-no processes and no sleeping. Its clock is a field the test moves, so a
+dropdown, a fullscreen window bouncing between workspaces, eww restarting, eww
+reloading out from under us — with no processes and no sleeping. Its clock is a field the test moves, so a
 five-minute timeout is tested instantly.
 
 Each module also has its own tests, which know nothing of the bar: they ask the

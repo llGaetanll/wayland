@@ -20,9 +20,11 @@ use module_bar::ConfigBar;
 use module_bar::Event;
 use module_bar::EventBar;
 use module_bar::EventClock;
+use module_bar::EwwGen;
 use module_bar::MenuId;
 use module_bar::ServerId;
 use module_bar::StateBar;
+use module_bar::EWW_GEN_VAR;
 use module_battery::Battery;
 use module_battery::EventBattery;
 use module_bluetooth::BtSnapshot;
@@ -71,6 +73,10 @@ pub struct World {
     /// Ids handed out so far, so a restarted server is never mistaken for the
     /// one it replaced.
     eww_started: u64,
+    /// The generation eww's variable table is holding. A reload clears this
+    /// without the server ever changing, which is the shape of the second
+    /// failure: same socket, same inode, nothing left in it.
+    eww_gen: Option<EwwGen>,
     /// Whether asking for a server produces one. False is a start that failed,
     /// which is the only way to watch what the machine does with a run of
     /// observations that find nothing.
@@ -108,6 +114,7 @@ impl World {
             dock_running: Vec::new(),
             eww: Some(ServerId::new(1)),
             eww_started: 1,
+            eww_gen: None,
             eww_starts: true,
             clients: Vec::new(),
             focused: WorkspaceId(1),
@@ -131,10 +138,32 @@ impl World {
         self
     }
 
-    /// What the probe sees now, sent in as the probe's own event.
+    /// What the probe sees now, sent in as the probe's own event: who is
+    /// listening, and what their variable table is stamped with.
     pub fn eww_seen(&mut self) -> &mut World {
         let server = self.eww;
-        self.feed(&[Event::Bar(EventBar::EwwObserved { server })])
+        let gen = self.eww_gen;
+        self.feed(&[Event::Bar(EventBar::EwwObserved { server, gen })])
+    }
+
+    /// A read the probe took before the last republish landed, arriving after
+    /// it. Says what eww held a moment ago, which is not what it holds now.
+    pub fn eww_seen_stale(&mut self, gen: Option<EwwGen>) -> &mut World {
+        let server = self.eww;
+        self.feed(&[Event::Bar(EventBar::EwwObserved { server, gen })])
+    }
+
+    /// `eww reload`. The server never went anywhere — same process, same
+    /// socket, same inode — and it has thrown away every variable it held,
+    /// because re-reading the config puts each `defvar` back at its default.
+    pub fn eww_reloaded(&mut self) -> &mut World {
+        self.eww_gen = None;
+        self.eww_seen()
+    }
+
+    /// What eww is holding for a var, as opposed to what the machine believes.
+    pub fn eww_gen(&self) -> Option<EwwGen> {
+        self.eww_gen
     }
 
     /// A client that could not connect forked itself into a server and rebound
@@ -143,6 +172,8 @@ impl World {
     pub fn eww_taken_over(&mut self) -> &mut World {
         self.eww_started += 1;
         self.eww = Some(ServerId::new(self.eww_started));
+        // A server nobody has published to holds the defaults, stamp included.
+        self.eww_gen = None;
         self.eww_seen()
     }
 
@@ -227,10 +258,18 @@ impl World {
             ActionBar::EwwStart if self.eww_starts => {
                 self.eww_started += 1;
                 self.eww = Some(ServerId::new(self.eww_started));
-                vec![Event::Bar(EventBar::EwwObserved { server: self.eww })]
+                self.eww_gen = None;
+                let (server, gen) = (self.eww, self.eww_gen);
+                vec![Event::Bar(EventBar::EwwObserved { server, gen })]
             }
             ActionBar::EwwStart => Vec::new(),
-            ActionBar::EwwAdopt { .. } => Vec::new(),
+            // The runtime answers an adopt by publishing every var again, the
+            // stamp among them. That is the reconciler's job in the daemon;
+            // here it is the one line of it this fake needs.
+            ActionBar::EwwAdopt { .. } => {
+                self.eww_gen = self.bar.vars().get(EWW_GEN_VAR).and_then(EwwGen::parse);
+                Vec::new()
+            }
         }
     }
 

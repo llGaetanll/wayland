@@ -408,6 +408,37 @@ fn state_survives_an_eww_restart() {
     assert_eq!((w.var("wifi"), w.windows()), before);
 }
 
+/// eww reloading must not lose anything either, and it is the harder half: the
+/// server is the same process on the same socket, so nothing about the
+/// connection changed — only the table behind it, which is back at the
+/// defaults the config declares. Left unnoticed this is a bar and a dock
+/// wearing whatever `defvar` said, which is what happened: a stylesheet edit,
+/// an `eww reload`, and the theme was light and the dock had no apps in it.
+#[test]
+fn state_survives_an_eww_reload() {
+    let mut w = World::new();
+    w.eww_seen();
+    let stamped = w.eww_gen();
+    assert!(stamped.is_some(), "adopting stamps eww's table");
+    // The probe after that reads the stamp back, and there is nothing to do
+    // about a table that is still ours — however long we sit on it.
+    w.eww_seen();
+    w.wait(Millis::secs(11));
+    assert_eq!(w.counts().get("eww-adopt"), Some(&1));
+
+    w.eww_reloaded();
+
+    assert_eq!(
+        w.counts().get("eww-adopt"),
+        Some(&2),
+        "a table emptied under us is a table that has to be filled again"
+    );
+    assert!(
+        w.eww_gen().is_some() && w.eww_gen() != stamped,
+        "and filling it again leaves a stamp we can judge the next read by"
+    );
+}
+
 /// The bug this whole thing exists for. An eww client that cannot connect forks
 /// itself into a second server and rebinds the socket, so the first is left
 /// alive with the bar and dock still on screen and nothing able to reach them.

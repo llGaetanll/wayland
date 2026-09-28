@@ -39,6 +39,7 @@ use crate::config::ConfigBar;
 use crate::event::Event;
 use crate::event_bar::EventBar;
 use crate::event_clock::EventClock;
+use crate::eww_gen::EwwGen;
 use crate::menu::MenuId;
 use crate::module_id::ModuleId;
 use crate::module_id::PollPlan;
@@ -57,6 +58,20 @@ const MAX_EMIT_ROUNDS: usize = 8;
 /// session when a start quietly fails.
 const EWW_START_AGAIN: Millis = Millis(10_000);
 
+/// How long a stamp has to be on the wire before a table that is not carrying
+/// it counts as reset.
+///
+/// The probe samples on its own thread, so a read can be taken before a stamp
+/// is published and still arrive after it. Without this the answer to that read
+/// would be to stamp again, which the next stale read would answer the same
+/// way, for ever. Longer than the probe interval, so the window always contains
+/// a fresh read; on a real reload it is what the healing costs.
+const EWW_STAMP_SETTLE: Millis = Millis(10_000);
+
+/// The eww var the generation is stamped into. Declared in `eww.yuck` as
+/// `(defvar eww_gen "")`, and read back by the probe.
+pub const EWW_GEN_VAR: &str = "eww_gen";
+
 #[derive(Default)]
 pub struct StateBar {
     /// Which dropdown is open. The whole point of the type.
@@ -72,6 +87,14 @@ pub struct StateBar {
     /// once rather than once every probe: asking twice is how a second server
     /// gets started while the first is still coming up.
     eww_started: Option<Millis>,
+    /// The generation we are publishing, and the one the last probe read back
+    /// out of eww. Two fields for the same reason the server is two: the
+    /// difference between them is a table that has to be filled again.
+    eww_gen: EwwGen,
+    eww_gen_seen: Option<EwwGen>,
+    /// When the current generation was stamped, so a read taken before it
+    /// landed is not mistaken for the table being thrown away a second time.
+    eww_stamped: Option<Millis>,
 
     audio: StateAudio,
     backlight: StateBacklight,
@@ -214,6 +237,9 @@ impl StateBar {
         self.theme.vars(&mut v);
         self.wifi.vars(&mut v);
         v.set("menu", self.menu.map(|m| m.as_str()).unwrap_or(""));
+        // Published like any other var, so it travels the same diff and is
+        // re-sent with everything else the moment eww is adopted.
+        v.set(EWW_GEN_VAR, self.eww_gen);
         v
     }
 
@@ -288,7 +314,10 @@ impl StateBar {
                 }
             }
             EventBar::MenuDismissed => self.close_menu(),
-            EventBar::EwwObserved { server } => self.eww_seen = *server,
+            EventBar::EwwObserved { server, gen } => {
+                self.eww_seen = *server;
+                self.eww_gen_seen = *gen;
+            }
         }
     }
 
@@ -312,6 +341,12 @@ impl StateBar {
     /// to can be replaced without anything dying and without anything asking
     /// us. A server we have not adopted holds none of our variables and none of
     /// our windows, so it is told everything again.
+    ///
+    /// The same server can lose everything too: `eww reload` re-reads the
+    /// config and puts every var back at its default, on the same socket and
+    /// the same inode. That is what the generation is for — an adoption is a
+    /// server we have not published to, or a table that is no longer carrying
+    /// our stamp, and the remedy is identical either way.
     fn emit_eww(&mut self, actions: &mut Vec<Action>) {
         match self.eww_seen {
             None => {
@@ -327,11 +362,30 @@ impl StateBar {
             }
             Some(server) => {
                 self.eww_started = None;
-                if self.eww_adopted != Some(server) {
+                if self.eww_adopted != Some(server) || self.eww_forgot_us() {
                     self.eww_adopted = Some(server);
+                    self.eww_gen = self.eww_gen.next();
+                    self.eww_stamped = Some(self.now);
                     actions.push(Action::Bar(ActionBar::EwwAdopt { server }));
                 }
             }
+        }
+    }
+
+    /// Whether the server we are already publishing to is holding a variable
+    /// table that is not the one we filled.
+    ///
+    /// Only a read from after the current stamp was published can say: an older
+    /// generation, the unstamped default included, is what a read still in
+    /// flight when we stamped would carry, and answering that by stamping again
+    /// is a loop with no end. See [`EWW_STAMP_SETTLE`].
+    fn eww_forgot_us(&self) -> bool {
+        if self.eww_gen_seen == Some(self.eww_gen) {
+            return false;
+        }
+        match self.eww_stamped {
+            None => true,
+            Some(at) => self.now.since(at) >= EWW_STAMP_SETTLE,
         }
     }
 

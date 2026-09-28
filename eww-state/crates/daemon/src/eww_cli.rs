@@ -5,7 +5,9 @@ use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::path::PathBuf;
 
+use module_bar::EwwGen;
 use module_bar::ServerId;
+use module_bar::EWW_GEN_VAR;
 
 use crate::reconcile::EwwSink;
 
@@ -54,6 +56,18 @@ impl EwwCli {
     /// to stay in the foreground, and nothing here would ever return.
     pub fn start(&self) -> bool {
         self.exec(&["daemon"])
+    }
+
+    /// What generation the server's variable table is carrying, if any.
+    ///
+    /// The socket cannot answer this: `eww reload` re-reads the config on the
+    /// same socket and the same inode, and every var is back at its default
+    /// afterwards. Reading the stamp back is the only way to tell a table we
+    /// filled from one that has been emptied under us. An empty answer is the
+    /// `defvar` default; so is no answer at all, which is a server that went
+    /// away between the probe and the question.
+    pub fn read_gen(&self) -> Option<EwwGen> {
+        EwwGen::parse(&self.query(&["get", EWW_GEN_VAR])?)
     }
 
     /// Whether the server has all of these windows on screen.
