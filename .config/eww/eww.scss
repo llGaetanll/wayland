@@ -66,11 +66,18 @@
   background-size: contain;
 }
 
-// The hairline between apps and the Trash. 2pt wide and 18.5pt tall in the
-// capture, sitting in its own gap rather than tight against either neighbour.
+// The hairline between apps and the Trash, sitting in its own gap rather than
+// tight against either neighbour. A box in the dock's horizontal row is
+// stretched to the full row height unless it is told otherwise, which is what
+// the :valign/:vexpand in the yuck are for; with those in place this height is
+// the one it gets, and it is the icon artwork's visible ink (34pt of cell,
+// about 28pt of drawn icon) rather than the cell.
+// GTK3 CSS has no max-* properties, and one unknown property makes eww drop
+// the ENTIRE stylesheet — every widget goes stock-Adwaita white. Don't reach
+// for max-height here.
 .dock-sep {
   min-width: 1px;
-  min-height: 19px * $ui-scale;
+  min-height: 28px * $ui-scale;
   margin: 0 11px * $ui-scale;
 }
 .dock.dark  .dock-sep { background-color: rgba(255, 255, 255, 0.22); }

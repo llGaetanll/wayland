@@ -70,7 +70,7 @@
     (box :class "dock-apps" :space-evenly false :spacing 0
       (for a in {dock_apps}
         (applaunch :id {a.id} :icon {a.icon})))
-    (box :class "dock-sep")
+    (box :class "dock-sep" :valign "center" :vexpand false)
     ;; Its own box for the same reason the app loop has one.
     (box :class "dock-minimized" :space-evenly false :spacing 0
       (for m in {dock_minimized}
