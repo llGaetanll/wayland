@@ -41,7 +41,7 @@
 ;; or remove, it is a fixture at the end past the separator. Modelling it as one
 ;; would make it draggable and let the user drop another app onto it.
 (defwidget trash []
-  (button :class "dock-btn" :onclick "eww-state dock launch trash"
+  (button :class "dock-btn trash" :onclick "eww-state dock launch trash"
     (box :class "dock-cell" :halign "center" :valign "center"
       (box :class "dock-icon" :halign "center" :valign "center"
            :style "background-image: url('/home/al/.config/eww/icons/apps/trash.png');"))))

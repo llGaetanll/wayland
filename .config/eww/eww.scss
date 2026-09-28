@@ -38,6 +38,23 @@
 // macOS ships with Dock magnification OFF, and the capture confirms it — every
 // tile in full-desktop.png is the same size. So hovering brightens rather than
 // grows, which also keeps the slab from resizing under the pointer.
+// The Trash is the one tile whose artwork is not the shape of the others: its
+// can trims to 387 of its 512pt canvas where an app icon trims to 436, so drawn
+// on the same grid it carries 2px more transparent margin each side. That is
+// not a layout the eye reads as margin — it read as a wider gap at the dock's
+// right edge than at its left, and a separator sitting off centre in its own
+// gap. The cell is narrowed by exactly that much and the image is still drawn
+// at the full cell size, so what gets clipped is the empty margin and nothing
+// else: the can keeps its own proportions and its own size, and every gap in
+// the dock comes out equal.
+.dock-btn.trash .dock-cell,
+.dock-btn.trash .dock-icon {
+  min-width: 34px * $ui-scale - 4px;
+}
+.dock-btn.trash .dock-icon {
+  background-size: 34px * $ui-scale 34px * $ui-scale;
+}
+
 .dock-btn { background-color: transparent; }
 .dock-btn:hover .dock-icon { opacity: 0.78; }
 
