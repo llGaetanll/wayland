@@ -1,5 +1,7 @@
 //! What this module has to be told rather than work out.
 
+use crate::model::SinkKind;
+
 #[derive(Clone, Debug)]
 pub struct ConfigAudio {
     /// Directory holding the symbolic status icons (`.svg` files).
@@ -27,5 +29,18 @@ impl ConfigAudio {
 
     pub(crate) fn icon(&self, name: &str) -> String {
         format!("{}/{}.svg", self.icons_dir, name)
+    }
+
+    /// The glyph for one output row. The sink in use sits in a filled accent
+    /// circle, so its glyph is the `-on` one, which is white in both icon sets
+    /// — the themed glyph would be black on accent in light appearance.
+    pub(crate) fn output_icon(&self, kind: SinkKind, active: bool) -> String {
+        let kind = match kind {
+            SinkKind::Speaker => "speaker",
+            SinkKind::Headphones => "headphones",
+            SinkKind::Display => "display",
+        };
+        let suffix = if active { "-on" } else { "" };
+        self.icon(&format!("audio-out-{kind}{suffix}-symbolic"))
     }
 }

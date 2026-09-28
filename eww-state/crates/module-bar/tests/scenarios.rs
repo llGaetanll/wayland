@@ -132,6 +132,54 @@ fn dragging_the_volume_slider_beats_the_poll() {
     );
 }
 
+/// Picking an output end to end: the row is clicked, the world moves, and the
+/// level is read again because volume belongs to the sink rather than the
+/// machine.
+#[test]
+fn picking_an_output_end_to_end() {
+    let mut w = World::new();
+    w.menu(MenuId::Volume);
+    assert!(
+        w.var("vol_outputs")
+            .contains(r#""name":"Speaker","active":true"#),
+        "the panel lists what is plugged in: {}",
+        w.var("vol_outputs")
+    );
+
+    w.volume = 30; // the headphones are quieter than the speaker was
+    w.feed(&[Event::Audio(EventAudio::OutputPicked {
+        id: "phones".into(),
+    })]);
+
+    assert_eq!(w.default_sink, "phones", "the world followed the click");
+    assert!(
+        w.var("vol_outputs")
+            .contains(r#""name":"AirPods Pro","active":true"#),
+        "and so did the tick: {}",
+        w.var("vol_outputs")
+    );
+    assert_eq!(w.var("vol_pct"), "30", "the slider re-read the new sink");
+}
+
+/// The outputs are listed only while the panel is up: a tick with it shut is
+/// the bar icon's business and nothing else's.
+#[test]
+fn the_output_list_sleeps_while_the_panel_is_shut() {
+    let mut w = World::new();
+    w.menu(MenuId::Volume);
+    w.menu(MenuId::Volume); // and shut again
+
+    w.sinks.clear();
+    w.feed(&[module_bar::ModuleId::Audio.due()]);
+    assert!(
+        w.var("vol_outputs").contains("Speaker"),
+        "nothing re-listed, so the last list stands"
+    );
+
+    w.menu(MenuId::Volume);
+    assert_eq!(w.var("vol_outputs"), "[]", "opening it looks again");
+}
+
 /// Joining a network: the row says so, then the menu dismisses itself and the
 /// bar reflects the new connection.
 #[test]

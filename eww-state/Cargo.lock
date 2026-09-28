@@ -45,6 +45,7 @@ name = "module-audio"
 version = "0.1.0"
 dependencies = [
  "api-core",
+ "util-eval",
  "util-exec",
 ]
 

@@ -453,13 +453,13 @@ impl StateBar {
             } else {
                 EventBluetooth::MenuClosed
             }),
-            // The sliders have no open/closed state of their own; they just want
-            // a fresh value the moment they appear.
-            MenuId::Volume => {
-                if opened {
-                    self.audio.handle_event(&EventAudio::Due)
-                }
-            }
+            // The Sound panel has a list in it, so unlike Display it cares
+            // which way it went: the outputs are only sampled while it is up.
+            MenuId::Volume => self.audio.handle_event(&if opened {
+                EventAudio::MenuOpened
+            } else {
+                EventAudio::MenuClosed
+            }),
             MenuId::Brightness => {
                 if opened {
                     self.backlight.handle_event(&EventBacklight::Due)

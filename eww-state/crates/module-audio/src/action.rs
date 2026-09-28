@@ -7,5 +7,13 @@
 #[derive(Debug)]
 pub enum ActionAudio {
     Sample,
-    Set { percent: u8 },
+    Set {
+        percent: u8,
+    },
+    SampleOutputs,
+    /// Make this sink the one new streams go to. At most one is ever out, so
+    /// like `Set` it needs no id to be recognised on the way back.
+    SetDefaultOutput {
+        id: String,
+    },
 }

@@ -64,6 +64,11 @@ pub fn parse(args: &[&str]) -> Result<Cmd, String> {
         ["volume", "set", v] => {
             num(v).map(|percent| ev(Event::Audio(module_audio::EventAudio::Set { percent })))
         }
+        ["volume", "output", id_b64] => {
+            Ok(ev(Event::Audio(module_audio::EventAudio::OutputPicked {
+                id: decode(id_b64)?,
+            })))
+        }
         ["brightness", "set", v] => num(v).map(|percent| {
             ev(Event::Backlight(module_backlight::EventBacklight::Set {
                 percent,

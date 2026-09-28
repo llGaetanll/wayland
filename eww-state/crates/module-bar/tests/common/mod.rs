@@ -12,7 +12,10 @@ use std::collections::BTreeMap;
 
 use api::Millis;
 use module_audio::Audio;
+use module_audio::AudioOutputs;
+use module_audio::AudioSink;
 use module_audio::EventAudio;
+use module_audio::SinkKind;
 use module_backlight::EventBacklight;
 use module_bar::Action;
 use module_bar::ActionBar;
@@ -61,6 +64,9 @@ pub struct World {
     // What the machine can observe about the world.
     pub volume: u8,
     pub muted: bool,
+    /// The outputs a listing would find, and the one sound is going to.
+    pub sinks: Vec<AudioSink>,
+    pub default_sink: String,
     pub brightness: u8,
     pub net: NetSnapshot,
     pub bt: BtSnapshot,
@@ -114,6 +120,19 @@ impl World {
             now: Millis::default(),
             volume: 50,
             muted: false,
+            sinks: vec![
+                AudioSink {
+                    id: "speaker".into(),
+                    name: "Speaker".into(),
+                    kind: SinkKind::Speaker,
+                },
+                AudioSink {
+                    id: "phones".into(),
+                    name: "AirPods Pro".into(),
+                    kind: SinkKind::Headphones,
+                },
+            ],
+            default_sink: "speaker".into(),
             brightness: 40,
             net: NetSnapshot::default(),
             bt: BtSnapshot::default(),
@@ -431,6 +450,16 @@ impl World {
             ActionAudio::Set { percent } => {
                 self.volume = percent;
                 vec![Event::Audio(EventAudio::Finished)]
+            }
+            ActionAudio::SampleOutputs => vec![Event::Audio(EventAudio::OutputsObserved {
+                outputs: AudioOutputs {
+                    sinks: self.sinks.clone(),
+                    default: self.default_sink.clone(),
+                },
+            })],
+            ActionAudio::SetDefaultOutput { id } => {
+                self.default_sink = id;
+                vec![Event::Audio(EventAudio::OutputSwitched { ok: true })]
             }
         }
     }
