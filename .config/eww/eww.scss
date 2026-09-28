@@ -370,8 +370,11 @@
   background-size: cover;
 }
 .shot-actions { margin-top: 2px * $ui-scale; }
+// Horizontal padding as well as vertical: with the labels no longer allowed to
+// be cut, the smallest card is the one these three buttons ask for, and at that
+// size a label with no padding sits hard against the edge of its button.
 .shot-btn {
-  padding: 6px * $ui-scale 0;
+  padding: 6px * $ui-scale 10px * $ui-scale;
   border-radius: 7px * $ui-scale;
   font-weight: 500;
 }
