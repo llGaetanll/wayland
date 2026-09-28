@@ -302,16 +302,31 @@
   (box :class "menu ${theme}" :orientation "vertical" :space-evenly false
     (box :class "islider-head" :valign "center"
       (label :class "menu-title" :text title :halign "start" :hexpand true))
-    (overlay :class "islider ${theme}"
-      ;; :timeout must beat eww's 200ms default, or a slow set is SIGKILLed
-      ;; mid-write. It never gets close now — the handler is a socket write.
-      (scale :class "islider-input" :hexpand true :value value :min 0 :max 100
-             :round-digits 0 :timeout "2s" :onchange onchange)
-      (box :class "islider-icon" :halign "start" :valign "center"
-           :style "background-image: url('${replace(icon, "/dark/", "/light/")}');"))))
+    (box :class "islider ${theme}"
+      (overlay
+        ;; :timeout must beat eww's 200ms default, or a slow set is SIGKILLed
+        ;; mid-write. It never gets close now — the handler is a socket write.
+        ;; :max 101, not 100. eww builds every scale on a GtkAdjustment with a
+        ;; page_size of 1 (widget_definitions.rs, `Adjustment::new(0, 0, 100, 1,
+        ;; 1, 1)`) and :max only sets the adjustment's upper — and GTK caps a
+        ;; value at `upper - page_size`. With :max 100 the last percent was
+        ;; unreachable by dragging: the end of the track set 99, and the knob
+        ;; stopped 3px short of the end. The daemon clamps to 100 either way.
+        (scale :class "islider-input" :hexpand true :value value :min 0 :max 101
+               :round-digits 0 :timeout "2s" :onchange onchange)
+        (box :class "islider-track" :valign "center")
+        (box :class "islider-fill" :halign "start" :valign "center"
+             :style "min-width: ${27.5 + value * 3.1}px;")
+        ;; The fraction of the 248pt travel (270pt of track less the 22pt
+        ;; knob), in px — the 14pt inset is already on .islider. The panel is a
+        ;; fixed 298pt wide, so this is arithmetic, not something GTK solves.
+        (box :class "islider-knob" :halign "start" :valign "center"
+             :style "margin-left: ${value * 3.1}px;")
+        (box :class "islider-icon" :halign "start" :valign "center"
+             :style "background-image: url('${replace(icon, "/dark/", "/light/")}');")))))
 
 (defwidget vol-slider []
-  (slider-panel :title "Sound" :icon vol_icon :value vol_pct
+  (slider-panel :title "Volume" :icon vol_icon :value vol_pct
                 :onchange "eww-state volume set {}"))
 
 (defwidget bri-slider []
