@@ -207,7 +207,7 @@ if hl.plugin and hl.plugin.hyprbars ~= nil then
         bar_text_font = "Inter",
         bar_text_align = "center",
         bar_buttons_alignment = "left",
-        bar_padding = 10,
+        bar_padding = 12,
         bar_button_padding = 8,
         icon_on_hover = true,
         on_double_click = [[hyprctl dispatch "hl.dsp.window.fullscreen({ mode = 'maximized' })"]],
