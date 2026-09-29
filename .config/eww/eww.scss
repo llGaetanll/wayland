@@ -38,23 +38,6 @@
 // macOS ships with Dock magnification OFF, and the capture confirms it — every
 // tile in full-desktop.png is the same size. So hovering brightens rather than
 // grows, which also keeps the slab from resizing under the pointer.
-// The Trash is the one tile whose artwork is not the shape of the others: its
-// can trims to 387 of its 512pt canvas where an app icon trims to 436, so drawn
-// on the same grid it carries 2px more transparent margin each side. That is
-// not a layout the eye reads as margin — it read as a wider gap at the dock's
-// right edge than at its left, and a separator sitting off centre in its own
-// gap. The cell is narrowed by exactly that much and the image is still drawn
-// at the full cell size, so what gets clipped is the empty margin and nothing
-// else: the can keeps its own proportions and its own size, and every gap in
-// the dock comes out equal.
-.dock-btn.trash .dock-cell,
-.dock-btn.trash .dock-icon {
-  min-width: 34px * $ui-scale - 4px;
-}
-.dock-btn.trash .dock-icon {
-  background-size: 34px * $ui-scale 34px * $ui-scale;
-}
-
 .dock-btn { background-color: transparent; }
 .dock-btn:hover .dock-icon { opacity: 0.78; }
 
@@ -83,8 +66,8 @@
   background-size: contain;
 }
 
-// The hairline between apps and the Trash, sitting in its own gap rather than
-// tight against either neighbour. A box in the dock's horizontal row is
+// The hairline between the apps and the minimized windows, sitting in its own
+// gap rather than tight against either neighbour. A box in the dock's horizontal row is
 // stretched to the full row height unless it is told otherwise, which is what
 // the :valign/:vexpand in the yuck are for; with those in place this height is
 // the one it gets, and it is the icon artwork's visible ink (34pt of cell,
@@ -152,7 +135,7 @@
 // here sized the glyph to the padded box and drew it 29pt wide instead of 25.5.
 // Pinning both axes is the fix; the numbers are the SVG's own viewBox, which is
 // the macOS glyph's measured 25.5 x 12.
-.batt-slot { padding: 4px * $ui-scale 8px * $ui-scale; }
+.batt-slot { padding: 4px * $ui-scale 10px * $ui-scale; }
 // macOS sets the menu bar percentage in the same face and size as the clock,
 // with 4pt between the number's ink and the pill's left cap.
 .batt-pct { margin-right: 4px * $ui-scale; }
@@ -174,11 +157,11 @@
 // and on average too wide — ink gaps. 8px each side is the padding that lands
 // the measured mean back on 20. The padding is inside the button, so the gap
 // stays clickable rather than being a dead zone the pointer has to thread.
-// 6px, not 8: the glyph canvas carries 2pt of transparent margin each side
-// since it went from 16 to 20 wide, and that margin sits between the ink just
-// as padding would. The ink gap is unchanged.
+// 8px each side, which runs the ink gap a little past the measured 20: the
+// tighter 6px that matched the mean exactly read as cramped next to macOS on
+// this panel, so the run is deliberately looser.
 .sicon {
-  padding: 4px * $ui-scale 6px * $ui-scale;
+  padding: 4px * $ui-scale 8px * $ui-scale;
 }
 .sicon:hover { opacity: 0.6; }
 
