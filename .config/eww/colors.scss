@@ -1,22 +1,6 @@
 // Mirror of ~/.config/colors.sh — keep the two in sync.
 $accent: #0a84ff;
 
-// Panel material. The TINT below is FITTED, not chosen: see
-// ~/macos-match/targets.json. Regressing the Dock's fill against the wallpaper
-// showing through it, over 1000 columns and two independent fill strips of
-// desktop/full-desktop.png, gives alpha 0.72-0.76 over a tint near #4a4a4c once
-// the wallpaper's orange cast is taken back out.
-//
-// The ALPHA is the one number here that is a decision rather than a
-// measurement: 0.45, taken from $bar-dark so the dock and the bar are equally
-// see-through, in place of the fitted 0.74 (user's call, 2026-09-28). The dock
-// therefore reads rgb(33,33,34) over a black desktop and rgb(174,174,174) over
-// a white one rather than macOS's 55 and 121; targets.json carries those as the
-// predicted values tools/report.py checks. Light mode was already at the bar's
-// alpha and is untouched.
-$dock-dark: rgba(74, 74, 76, 0.45);
-$dock-light: rgba(246, 246, 248, 0.72);
-
 // The menu bar is the one surface these captures cannot pin down: the Mac's
 // wallpaper under it is flat near-black (#050911) and the bar reads #020711, so
 // its alpha is unrecoverable — over that backdrop a transparent bar and a dark
@@ -26,6 +10,22 @@ $dock-light: rgba(246, 246, 248, 0.72);
 // which is a usability floor macOS meets by recolouring its menu bar text.
 $bar-dark: rgba(0, 0, 0, 0.45);
 $bar-light: rgba(246, 246, 248, 0.72);
+
+// Panel material. Neither number here is a measurement any more — the dock is
+// simply the bar, so the two surfaces on screen at once are the same material.
+//
+// What was measured, kept for the record: regressing the Dock's fill against
+// the wallpaper showing through it, over 1000 columns and two independent fill
+// strips of desktop/full-desktop.png, gives alpha 0.72-0.76 over a tint near
+// #4a4a4c once the wallpaper's orange cast is taken back out. The alpha went to
+// 0.45 first, taken from $bar-dark so dock and bar were equally see-through
+// (user's call, 2026-09-28); with matching alphas the fitted #4a4a4c tint was
+// what still read lighter than the bar, so the tint follows it too. macOS does
+// render a Dock lighter than its menu bar; this deliberately does not.
+// targets.json's predicted_over_black/white no longer describe what we render,
+// so tools/report.py will flag the dock material — that is expected.
+$dock-dark: $bar-dark;
+$dock-light: $bar-light;
 
 // The dropdown panels. macOS's popover material is darker than the Dock's: the
 // Wi-Fi panel reads rgb(34,34,35) over a near-black desktop where the Dock
