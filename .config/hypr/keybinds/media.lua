@@ -26,15 +26,13 @@ return {
     { key = mod .. " + ALT + plus",  action = hl.dsp.exec_cmd(bright_up),   opts = ramp },
     { key = mod .. " + ALT + minus", action = hl.dsp.exec_cmd(bright_down), opts = ramp },
 
-    -- Laptop function row. The keys arrive as ordinary XF86 keysyms on the
-    -- hid-sdw:...-consumer-control keyboard, so they are bound by keysym and the
-    -- physical order of the row does not matter.
+    -- Laptop function row, bound by keysym: they arrive as ordinary XF86 keys.
     { key = "XF86AudioRaiseVolume", action = hl.dsp.exec_cmd(vol_up),   opts = ramp },
     { key = "XF86AudioLowerVolume", action = hl.dsp.exec_cmd(vol_down), opts = ramp },
     { key = "XF86AudioMute",        action = hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"), opts = locked },
 
     -- The Dell privacy driver already cuts the mic in hardware; this keeps the
-    -- PipeWire source in step so apps see the same state.
+    -- PipeWire source in step.
     { key = "XF86AudioMicMute", action = hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"), opts = locked },
 
     { key = "XF86MonBrightnessUp",   action = hl.dsp.exec_cmd(bright_up),   opts = ramp },

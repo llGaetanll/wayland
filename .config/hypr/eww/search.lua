@@ -4,15 +4,11 @@ local mod = require("config.vars").mod
 -- rofi on 2026-09-28; the old theme is still in ~/.config/rofi/ for reference.
 hl.bind(mod .. " + Space", hl.dsp.exec_cmd("eww-state search open"))
 
--- The launcher's keyboard. eww has no key bindings of any kind, so the only
--- thing that can see a key the text field does not want is the compositor.
--- While this submap is active the four keys below come here and every other
--- key still reaches the entry, which is what lets the user keep typing.
---
--- Escape gives the keyboard back here as well as telling the daemon, so a
--- daemon that has died cannot leave the session stuck in a submap.
--- KEEP IN SYNC with SUBMAP in eww-state (crates/module-search/src/perform.rs),
--- which is what enters and leaves it.
+-- The launcher's keyboard: eww has no key bindings, so only the compositor can
+-- see a key the text field does not want. While this submap is active these four
+-- keys come here and everything else still reaches the entry.
+-- Escape also resets the submap, so a dead daemon cannot leave the session stuck.
+-- KEEP IN SYNC with SUBMAP in eww-state (crates/module-search/src/perform.rs).
 hl.define_submap("search", function()
     hl.bind("escape",          hl.dsp.exec_cmd("eww-state search close"))
     hl.bind("escape",          hl.dsp.submap("reset"))
@@ -21,7 +17,6 @@ hl.define_submap("search", function()
     hl.bind(mod .. " + Space", hl.dsp.exec_cmd("eww-state search open"))
 end)
 
--- no_anim: the launcher resizes its layer surface on every keystroke as the
--- result list grows and shrinks, and animating that makes the text visibly
--- morph. Same reason rofi had this rule. Costs the open fade too.
+-- no_anim: the launcher resizes its surface on every keystroke, and animating
+-- that makes the text visibly morph. Costs the open fade too.
 hl.layer_rule({ name = "eww-search-blur", match = { namespace = "^eww-search$" }, blur = true, ignore_alpha = 0.2, no_anim = true })

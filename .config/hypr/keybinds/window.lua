@@ -1,9 +1,8 @@
 local mod = require("config.vars").mod
 local rules = require("config.rules")
 
--- Floating vs tiling is a global mode, not a per-window state: the float-all
--- rule decides what new windows do, and every window that already exists is
--- switched over to match, on every workspace.
+-- Floating vs tiling is a global mode: the float-all rule decides what new
+-- windows do, and every existing window is switched over to match.
 local function set_floating(floating)
     rules.float_all:set_enabled(floating)
     local action = floating and "on" or "off"
@@ -17,9 +16,8 @@ return {
     { key = mod .. " + ALT + S", action = function() set_floating(true) end },
     { key = mod .. " + ALT + T", action = function() set_floating(false) end },
 
-    -- Close through eww-state: a window in a fullscreen Space has to be left
-    -- behind before it is closed, or the emptied Space lingers instead of
-    -- auto-destroying.
+    -- Close through eww-state: a window must leave its fullscreen Space first,
+    -- or the emptied Space lingers instead of auto-destroying.
     { key = mod .. " + Q", action = hl.dsp.exec_cmd("eww-state window close") },
 
     -- Toggle fullscreen on the focused window (moves it to its own Space).
