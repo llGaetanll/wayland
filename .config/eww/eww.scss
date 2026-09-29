@@ -8,7 +8,7 @@
 
 // Every number in this block is measured off desktop/full-desktop.png and
 // recorded in ~/macos-match/targets.json. The slab is centred, sitting 5 points
-// off the bottom of the screen, and the tiles are on an exact 34 point grid.
+// off the bottom of the screen, and the tiles are on the $dock-tile grid.
 // The padding is deliberately uniform: no running dots any more, so the tiles
 // are the only thing in the slab and they sit dead centre in it.
 .dock {
@@ -16,21 +16,22 @@
   padding: 4px * $ui-scale;
 }
 
-// One tile, and the 34pt grid itself: the cell is exactly one pitch wide, so
-// the tiles tile. Fixed size, so nothing inside one can move a neighbour.
+// One tile, and the grid itself: the cell is exactly one pitch wide, so the
+// tiles tile. Fixed size, so nothing inside one can move a neighbour.
 .dock-cell {
-  min-width: 34px * $ui-scale;
-  min-height: 34px * $ui-scale;
+  min-width: $dock-tile * $ui-scale;
+  min-height: $dock-tile * $ui-scale;
 }
 
 // A background-image rather than an image widget, so the icon is one GPU
 // texture and hover can be a CSS transition instead of a subprocess.
-// 34, not 30: the .icns artwork carries about 10% of transparent margin, and
-// what macOS lines up on the 34pt grid is the artwork, not the canvas. Drawn at
-// 34 the visible ink measures 27-28, which is what the capture shows.
+// The icon fills the whole cell rather than sitting inside it: the .icns
+// artwork carries about 10% of transparent margin, and what macOS lines up on
+// the tile grid is the artwork, not the canvas. Drawn at the full pitch the
+// visible ink comes out about 80% of it, which is what the capture shows.
 .dock-icon {
-  min-width: 34px * $ui-scale;
-  min-height: 34px * $ui-scale;
+  min-width: $dock-tile * $ui-scale;
+  min-height: $dock-tile * $ui-scale;
   background-repeat: no-repeat;
   background-position: center;
   background-size: contain;
@@ -46,7 +47,7 @@
 // picture's corner rather than floating below it. The width is an inline style
 // the daemon works out; only the height is a constant.
 .dock-thumb {
-  min-height: 34px * $ui-scale;
+  min-height: $dock-tile * $ui-scale;
   background-repeat: no-repeat;
   background-position: center;
   background-size: contain;
@@ -59,8 +60,8 @@
 // An app that is not in the dock has no icon path, and an empty url draws
 // nothing, which is the right answer rather than a missing-image box.
 .dock-badge {
-  min-width: 17px * $ui-scale;
-  min-height: 17px * $ui-scale;
+  min-width: $dock-tile * 0.5 * $ui-scale;
+  min-height: $dock-tile * 0.5 * $ui-scale;
   background-repeat: no-repeat;
   background-position: center;
   background-size: contain;
@@ -70,14 +71,14 @@
 // gap rather than tight against either neighbour. A box in the dock's horizontal row is
 // stretched to the full row height unless it is told otherwise, which is what
 // the :valign/:vexpand in the yuck are for; with those in place this height is
-// the one it gets, and it is the icon artwork's visible ink (34pt of cell,
-// about 28pt of drawn icon) rather than the cell.
+// the one it gets, and it is the icon artwork's visible ink (about 80% of the
+// cell) rather than the cell.
 // GTK3 CSS has no max-* properties, and one unknown property makes eww drop
 // the ENTIRE stylesheet — every widget goes stock-Adwaita white. Don't reach
 // for max-height here.
 .dock-sep {
   min-width: 1px;
-  min-height: 28px * $ui-scale;
+  min-height: $dock-tile * 0.82 * $ui-scale;
   margin: 0 11px * $ui-scale;
 }
 .dock.dark  .dock-sep { background-color: rgba(255, 255, 255, 0.22); }

@@ -15,3 +15,12 @@
 // daemon needs the same number because it sizes the dropdown scroll areas in
 // rows, and eww.yuck needs it for window geometry, which CSS cannot set.
 $ui-scale: 1.25;
+
+// The dock tile pitch, separate from $ui-scale because it is not a scaling
+// question. 34pt is what the capture measures, but that Dock held eleven apps
+// and macOS shrinks its tiles as the Dock fills — 34 is the squeezed size, not
+// the size macOS picks by default. With a handful of apps the slab sat at 42pt
+// and the ratio against the 24pt menu bar is the same 1.75 either way, which is
+// why the dock reads as small next to the bar rather than out of proportion to
+// it. Raise this alone to grow the dock without touching the bar.
+$dock-tile: 44px;
