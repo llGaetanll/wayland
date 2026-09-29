@@ -1,0 +1,41 @@
+;; Same pattern as Wi-Fi. A device click toggles its connection and leaves the
+;; menu open so the status updates in place — that difference is a rule in the
+;; daemon, not something this file decides.
+(defvar bt '{"enabled":true,"subtitle":"","list_h":40,"devices":[]}')
+(defvar bt_connecting "")
+
+(defwidget bt-panel []
+  (box :class "menu ${theme}" :orientation "vertical" :space-evenly false
+    (box :class "menu-head" :space-evenly false :valign "center"
+      (label :class "menu-title" :text "Bluetooth" :halign "start" :hexpand true)
+      (button :class "sw-btn" :valign "center" :onclick "eww-state bt toggle"
+        (box :class "sw ${bt.enabled ? 'on' : 'off'}" :valign "center" :vexpand false
+          (box :class "sw-knob" :valign "center" :halign {bt.enabled ? "end" : "start"}))))
+    (box :class "sep")
+    (label :class "menu-section" :text "Devices" :halign "start")
+    (scroll :class "menu-scroll" :vscroll true :height {bt.list_h}
+      (eventbox :cursor "default"
+        (box :orientation "vertical" :space-evenly false :valign "start"
+          (for d in {bt.devices}
+            (button :class "row" :onclick "eww-state bt connect ${d.mac_b64}"
+              (box :space-evenly false :spacing 8 :valign "center"
+                ;; Same leading column as Wi-Fi. Every device shows the same
+                ;; glyph for now; the per-kind icons macOS uses would need the
+                ;; device class out of bluetoothctl, which the daemon does not
+                ;; read yet.
+                (box :class "row-mark disc ${d.connected ? 'on' : 'off'}" :valign "center"
+                     :halign "center"
+                  (box :class "row-glyph" :halign "center" :valign "center"
+                       :style "background-image: url('${d.icon}');"))
+                (label :class "row-name" :text {d.name} :halign "start" :hexpand true
+                       :limit-width 26 :show-truncated true)
+                (label :class "row-connecting" :text "Connecting…"
+                       :visible {d.mac == bt_connecting})))))))))
+
+(defwindow bt-menu
+  :monitor 0
+  ;; 8 / 4 / 298 pt x 1.25
+  :geometry (geometry :anchor "top right" :x "10px" :y "5px" :width "373px")
+  :stacking "overlay"
+  :focusable false
+  (bt-panel))

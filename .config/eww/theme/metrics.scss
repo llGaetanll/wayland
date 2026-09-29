@@ -1,9 +1,9 @@
 // The single scale knob for every eww surface.
 //
-// Every length in eww.scss is written as `<macOS points> * $ui-scale`, so the
-// measured number stays visible next to it and this is the only value to
-// change. The macOS points come from ~/macos-match/targets.json, measured off
-// the captures in ~/macos-ui-capture.
+// Every length in the stylesheets is written as `<macOS points> * $ui-scale`,
+// so the measured number stays visible next to it and this is the only value
+// to change. The macOS points come from ~/macos-match/targets.json, measured
+// off the captures in ~/macos-ui-capture.
 //
 // Why it is not 1: the capture machine is a 2x Retina Mac, where one point is
 // about two physical pixels. This panel is 1920x1200 over ~14.5", so at scale
@@ -13,7 +13,7 @@
 //
 // KEEP IN SYNC: `ui_scale` in eww-state (crates/module-bar/src/config.rs). The
 // daemon needs the same number because it sizes the dropdown scroll areas in
-// rows, and eww.yuck needs it for window geometry, which CSS cannot set.
+// rows, and modules-shell/dock.yuck needs it for window geometry, which CSS cannot set.
 $ui-scale: 1.25;
 
 // The dock tile pitch, separate from $ui-scale because it is not a scaling
@@ -24,7 +24,7 @@ $ui-scale: 1.25;
 // why the dock reads as small next to the bar rather than out of proportion to
 // it. Raise this alone to grow the dock without touching the bar.
 //
-// KEEP IN SYNC: the `dock-low` geometry in eww.yuck. That window drops the slab
+// KEEP IN SYNC: the `dock-low` geometry in modules-shell/dock.yuck. That window drops the slab
 // until only 10px shows, so its offset is 10 - (this + 8) * $ui-scale, and eww
 // resolves defwindow geometry statically -- CSS cannot reach it.
 $dock-tile: 44px;

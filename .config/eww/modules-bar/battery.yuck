@@ -1,0 +1,125 @@
+;; The Battery panel, behind the bar's pill.
+;;
+;; Every var below is published by module-battery; the literals are only what
+;; the panel draws before the first sample lands. `batt` arrives as one object
+;; rather than a var per line for the reason `wifi` does: the daemon holds it as
+;; one struct and publishes it whole, so the panel can never show a percentage
+;; from one reading beside an estimate from another.
+;;
+;; What the module reads, all of it off this machine:
+;;   /sys/class/power_supply/BAT0/uevent — one read, so the percentage, the
+;;   current and the charge cannot come from three different instants.
+;; Draw is voltage_now * current_now, and the estimate is charge_now over
+;; current_now — the same division upower does.
+;;
+;; The list is the one estimate here. intel-rapl's energy_uj is root-only, so
+;; there is no per-process power meter to read: the share is CPU time over a
+;; measured window, grouped by process group so an app with fourteen content
+;; processes is one row. The ordering is real; a per-app wattage would not be,
+;; which is why the module publishes none.
+(defvar batt '{"percent":0,"charging":false,"source":"Battery",
+               "time_label":"Time remaining","time":"—",
+               "watts":"0.0 W","health":"Unknown","cycles":0}')
+
+;; The chart is an SVG the daemon regenerates, exactly like the bar's pill —
+;; GTK3 CSS cannot draw a chart, and eww's own `graph` widget only plots a value
+;; forward from the daemon's own uptime, so it cannot show the twelve hours that
+;; happened before the panel opened. The ring lives on disk, which is what lets
+;; the chart survive a daemon restart, and the path carries a fingerprint of the
+;; points so the background-image reloads when the picture moves.
+(defvar batt_graph "")
+(defvar batt_range "Last 12 Hours")
+
+;; Ordered by share, descending, top few only. `share` and `uptime` arrive as
+;; the finished strings: eww's expression language has no division that rounds
+;; the way a person reads a clock, and a duration split across two yuck
+;; expressions would be the same rule written twice.
+(defvar batt_procs "[]")
+
+(defwidget battery-panel []
+  (box :class "menu batt-menu ${theme}" :orientation "vertical" :space-evenly false
+    ;; Title left, the number right, on the same 42pt head every other panel
+    ;; uses. The percentage is the one thing worth reading big.
+    (box :class "menu-head" :space-evenly false :valign "center"
+      (label :class "menu-title" :text "Battery" :halign "start" :hexpand true)
+      (label :class "batt-big" :text "${batt.percent}%" :halign "end"))
+
+    ;; Source and estimate. Two lines rather than one: the estimate is what the
+    ;; panel is for, and burying it in a comma list makes it a footnote. The
+    ;; label changes with the cable ("Time remaining" / "Time until full"), so
+    ;; it comes from the daemon rather than being written here.
+    (box :class "batt-lines" :orientation "vertical" :space-evenly false
+      ;; The estimate leads: it is what the panel is opened for. Source and draw
+      ;; are the context that qualifies it, so they read after.
+      (box :space-evenly false
+        (label :class "batt-key" :text {batt.time_label} :halign "start" :hexpand true)
+        (label :class "batt-val strong" :text {batt.time} :halign "end"))
+      (box :space-evenly false
+        (label :class "batt-key" :text "Power Source" :halign "start" :hexpand true)
+        (label :class "batt-val" :text {batt.source} :halign "end"))
+      (box :space-evenly false
+        (label :class "batt-key" :text "Drawing" :halign "start" :hexpand true)
+        (label :class "batt-val" :text {batt.watts} :halign "end")))
+
+    (box :class "sep")
+
+    ;; The chart. Its height is fixed here and its width is the panel's content
+    ;; box; the SVG is authored at exactly that size so nothing is scaled.
+    (label :class "menu-section" :text batt_range :halign "start")
+    (box :class "batt-graph" :halign "fill"
+         :style "background-image: url('${batt_graph}');")
+    ;; No axis under the graph: the section label already says the span, and
+    ;; the right edge is always now. Three ticks restating that was noise.
+
+    (box :class "sep")
+
+    ;; Same row grammar as the Wi-Fi and Sound lists — fixed leading column, name,
+    ;; trailing value — so the three panels read as one family. The leading
+    ;; column is the app's own icon, sized to the 23pt the other panels give
+    ;; their circle.
+    ;;
+    ;; The share was a bar in the first pass and is a percentage now: a bar's
+    ;; length is only readable against a track, the track only reads as a track
+    ;; when it is full enough to look like one, and at 3% it did not — the
+    ;; rounded ends met and the row looked broken rather than low. A number does
+    ;; not have that floor.
+    (label :class "menu-section" :text "Using Significant Energy" :halign "start")
+    (box :orientation "vertical" :space-evenly false
+      (for p in batt_procs
+        ;; A box, not a button: there is nothing to click. Killing an app from
+        ;; the menu bar is not something macOS offers here and not something a
+        ;; panel with no confirmation should.
+        (box :class "row batt-row" :space-evenly false :spacing 9 :valign "center"
+          (box :class "batt-app-icon" :valign "center" :halign "center"
+               :style "background-image: url('${p.icon}');")
+          (label :class "row-name" :text {p.name} :halign "start" :hexpand true
+                 :limit-width 18 :show-truncated true)
+          ;; How long it has been up this boot, from /proc/<pid> starttime against
+          ;; /proc/uptime. It is the qualifier the share needs: 38% earned over
+          ;; six hours and 38% earned in the last ten minutes are not the same
+          ;; app to close, and the share alone cannot tell them apart.
+          ;; Each is a fixed-width box with the label pushed to its end, not a
+          ;; label carrying the width itself: a GtkLabel wider than its text
+          ;; centres the text inside its own allocation, and eww's label exposes
+          ;; no xalign to say otherwise — so the column lined up but the digits
+          ;; floated in the middle of it, sitting short of the panel's inset.
+          (box :class "batt-uptime-col" :halign "end"
+            (label :class "batt-uptime" :text {p.uptime} :halign "end"))
+          (box :class "batt-share-col" :halign "end"
+            (label :class "batt-share" :text {p.share} :halign "end")))))
+
+    ;; The footer macOS has, minus the link: there is no Settings app to open.
+    ;; Condition and cycles are both straight out of sysfs.
+    (box :class "sep")
+    ;; Two labels with a gap rather than one string with a separator: they are
+    ;; two readings, and a middot asked them to read as one phrase.
+    (box :class "batt-foot" :space-evenly false :spacing 14
+      (label :class "batt-key" :text "Condition" :halign "start" :hexpand true)
+      (label :class "batt-val" :text {batt.health} :halign "end")
+      (label :class "batt-val" :text "${batt.cycles} cycles" :halign "end"))))
+
+(defwindow battery-menu
+  ;; Same 373px and the same top-right anchor as the Sound and Wi-Fi panels.
+  :monitor 0 :geometry (geometry :anchor "top right" :x "10px" :y "5px" :width "373px")
+  :stacking "overlay" :focusable false
+  (battery-panel))

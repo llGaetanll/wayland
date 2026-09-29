@@ -1,0 +1,7 @@
+* { all: unset; }
+
+// Keep the eww window itself transparent (Adwaita paints it otherwise).
+.background { background-color: transparent; }
+
+// Shared by menu-backdrop, shot-backdrop and search-backdrop.
+.backdrop { background-color: transparent; }

@@ -1,0 +1,22 @@
+// Reuses the .menu card. The shot is a rounded background-image box sized by
+// screenshot.sh to the captured aspect ratio, so it never distorts.
+.shot { padding: 10px * $ui-scale; }
+.shot-preview {
+  border-radius: 8px * $ui-scale;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+}
+.shot-actions { margin-top: 2px * $ui-scale; }
+// Horizontal padding as well as vertical: with the labels no longer allowed to
+// be cut, the smallest card is the one these three buttons ask for, and at that
+// size a label with no padding sits hard against the edge of its button.
+.shot-btn {
+  padding: 6px * $ui-scale 10px * $ui-scale;
+  border-radius: 7px * $ui-scale;
+  font-weight: 500;
+}
+.menu.light .shot-btn { background-color: rgba(0, 0, 0, 0.06); }
+.menu.dark  .shot-btn { background-color: rgba(255, 255, 255, 0.10); }
+.menu.light .shot-btn:hover { background-color: rgba(0, 0, 0, 0.12); }
+.menu.dark  .shot-btn:hover { background-color: rgba(255, 255, 255, 0.16); }

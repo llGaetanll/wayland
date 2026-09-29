@@ -1,0 +1,83 @@
+// Every number in this block is measured off desktop/full-desktop.png and
+// recorded in ~/macos-match/targets.json. The slab is centred, sitting 5 points
+// off the bottom of the screen, and the tiles are on the $dock-tile grid.
+// The padding is deliberately uniform: no running dots any more, so the tiles
+// are the only thing in the slab and they sit dead centre in it.
+.dock {
+  border-radius: 10px * $ui-scale;      // corner profile off the right edge gives r 8-10
+  padding: 4px * $ui-scale;
+}
+
+// One tile, and the grid itself: the cell is exactly one pitch wide, so the
+// tiles tile. Fixed size, so nothing inside one can move a neighbour.
+.dock-cell {
+  min-width: $dock-tile * $ui-scale;
+  min-height: $dock-tile * $ui-scale;
+}
+
+// A background-image rather than an image widget, so the icon is one GPU
+// texture and hover can be a CSS transition instead of a subprocess.
+// The icon fills the whole cell rather than sitting inside it: the .icns
+// artwork carries about 10% of transparent margin, and what macOS lines up on
+// the tile grid is the artwork, not the canvas. Drawn at the full pitch the
+// visible ink comes out about 80% of it, which is what the capture shows.
+.dock-icon {
+  min-width: $dock-tile * $ui-scale;
+  min-height: $dock-tile * $ui-scale;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+// macOS ships with Dock magnification OFF, and the capture confirms it — every
+// tile in full-desktop.png is the same size. So hovering brightens rather than
+// grows, which also keeps the slab from resizing under the pointer.
+.dock-btn { background-color: transparent; }
+.dock-btn:hover .dock-icon { opacity: 0.78; }
+
+// A minimized window. macOS draws it at the tile height with its own aspect
+// ratio, so the tile is as wide as the window was and the badge lands on the
+// picture's corner rather than floating below it. The width is an inline style
+// the daemon works out; only the height is a constant.
+.dock-thumb {
+  min-height: $dock-tile * $ui-scale;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+.dock-btn:hover .dock-thumb { opacity: 0.78; }
+
+// The app icon badged on the corner. Half the tile, in the corner of the cell
+// rather than of the image: the image is letterboxed inside the cell and GTK
+// has no way to align anything to where a background-image actually landed.
+// An app that is not in the dock has no icon path, and an empty url draws
+// nothing, which is the right answer rather than a missing-image box.
+.dock-badge {
+  min-width: $dock-tile * 0.5 * $ui-scale;
+  min-height: $dock-tile * 0.5 * $ui-scale;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+
+// The hairline between the apps and the minimized windows, sitting in its own
+// gap rather than tight against either neighbour. A box in the dock's horizontal row is
+// stretched to the full row height unless it is told otherwise, which is what
+// the :valign/:vexpand in the yuck are for; with those in place this height is
+// the one it gets, and it is the icon artwork's visible ink (about 80% of the
+// cell) rather than the cell.
+// GTK3 CSS has no max-* properties, and one unknown property makes eww drop
+// the ENTIRE stylesheet — every widget goes stock-Adwaita white. Don't reach
+// for max-height here.
+.dock-sep {
+  min-width: 1px;
+  min-height: $dock-tile * 0.82 * $ui-scale;
+  margin: 0 11px * $ui-scale;
+}
+.dock.dark  .dock-sep { background-color: rgba(255, 255, 255, 0.22); }
+.dock.light .dock-sep { background-color: rgba(0, 0, 0, 0.18); }
+
+// Hairline edge, the same inset shadow the menus use (see .menu) and the same
+// weight as the 1px window border in hyprland.lua. Inset rather than a `border`
+// so it does not grow the slab past the measured padding.
+.dock.light { background-color: $dock-light; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12); }
+.dock.dark  { background-color: $dock-dark;  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.20); }

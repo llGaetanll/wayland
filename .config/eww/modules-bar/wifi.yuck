@@ -1,0 +1,73 @@
+;; The daemon polls the network faster while this menu is open and slower when it
+;; is not; the widget does not have to know that.
+(defvar wifi '{"enabled":true,"subtitle":"","list_h":40,"networks":[]}')
+
+;; SSID currently being joined, so its row can show "Connecting…".
+(defvar wifi_connecting "")
+
+(defwidget wifi-panel []
+  (box :class "menu ${theme}" :orientation "vertical" :space-evenly false
+    ;; Title and switch, nothing else. macOS carries no subtitle here: the
+    ;; network in use is the one marked in the list, not a line under the title.
+    (box :class "menu-head" :space-evenly false :valign "center"
+      (label :class "menu-title" :text "Wi-Fi" :halign "start" :hexpand true)
+      (button :class "sw-btn" :valign "center" :onclick "eww-state wifi toggle"
+        (box :class "sw ${wifi.enabled ? 'on' : 'off'}" :valign "center" :vexpand false
+          (box :class "sw-knob" :valign "center" :halign {wifi.enabled ? "end" : "start"}))))
+    (box :class "sep")
+    ;; The network in use, then everything else — the two sections macOS shows.
+    ;; The daemon publishes them as separate arrays because a widget cannot
+    ;; partition a list, and labelling one list "Known Network" was wrong about
+    ;; every row but one.
+    (label :class "menu-section" :text "Known Network" :halign "start"
+           :visible {wifi.has_known})
+    (box :orientation "vertical" :space-evenly false
+      (for n in {wifi.known}
+        (button :class "row" :onclick "eww-state wifi connect ${n.ssid_b64}"
+          (box :space-evenly false :spacing 9 :valign "center"
+            (box :class "row-mark on" :valign "center" :halign "center"
+              (box :class "row-glyph" :halign "center" :valign "center"
+                   :style "background-image: url('${n.icon_on}');"))
+            (label :class "row-name" :text {n.ssid} :halign "start" :hexpand true
+                   :limit-width 24 :show-truncated true)
+            (box :class "row-lock" :valign "center" :visible {n.secure})))))
+    (label :class "menu-section" :text "Other Networks" :halign "start")
+    ;; eventbox :cursor keeps the normal pointer during scroll; scroll and button
+    ;; can't set one, and a bare scroll shows GTK's box-dot cursor.
+    (scroll :class "menu-scroll" :vscroll true :height {wifi.list_h}
+      (eventbox :cursor "default"
+        (box :orientation "vertical" :space-evenly false :valign "start"
+          (for n in {wifi.networks}
+            ;; Base64: nothing an access point can call itself is ever
+            ;; interpreted, by a shell or by anything else.
+            (button :class "row" :onclick "eww-state wifi connect ${n.ssid_b64}"
+              (box :space-evenly false :spacing 8 :valign "center"
+                ;; One leading icon column, as in Control Center. The network in
+                ;; use fills the circle with the accent and switches to the white
+                ;; glyph; the rest show the bare signal glyph.
+                (box :class "row-mark ${n.active ? 'on' : 'off'}" :valign "center"
+                     :halign "center"
+                  (box :class "row-glyph" :halign "center" :valign "center"
+                       :style "background-image: url('${n.active ? n.icon_on : n.icon}');"))
+                (label :class "row-name" :text {n.ssid} :halign "start" :hexpand true
+                       :limit-width 24 :show-truncated true)
+                (label :class "row-connecting" :text "Connecting…"
+                       :visible {n.ssid == wifi_connecting})
+                ;; The padlock is a trailing item in macOS, at the right-hand
+                ;; edge of the row, not a badge on the signal glyph: measured at
+                ;; x 280..289 in a panel whose right edge is 305. Its image is
+                ;; set in the stylesheet rather than by an inline :style — see
+                ;; the note on .row-lock in util/card.scss.
+                (box :class "row-lock" :valign "center"
+                     :visible {n.secure})))))))))
+
+;; focusable false is required: focusable true grabs keyboard focus and breaks
+;; the click-outside backdrop. The cost is no Esc dismiss, since eww's
+;; onkeypressed needs focus; that would need a Hyprland keybind instead.
+(defwindow wifi-menu
+  :monitor 0
+  ;; 8 / 4 / 298 pt x 1.25
+  :geometry (geometry :anchor "top right" :x "10px" :y "5px" :width "373px")
+  :stacking "overlay"
+  :focusable false
+  (wifi-panel))

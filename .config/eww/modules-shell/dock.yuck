@@ -1,0 +1,103 @@
+;; The dock's apps, in order, each with whether it currently has a window.
+(defvar dock_apps "[]")
+
+;; One dock slot: the eventbox makes it both draggable and a drop target, so
+;; dropping app {} here swaps the two. A plain click falls through to the button.
+(defwidget applaunch [id icon]
+  (eventbox :class "dock-slot" :dragvalue id :dragtype "values"
+            :ondropped "eww-state dock swap {} ${id}"
+    ;; No `setsid -f` anywhere in this file any more. Every handler is one
+    ;; connect-write-read on a unix socket and returns in well under eww's
+    ;; 200ms :timeout, which is what used to truncate the shell handlers
+    ;; mid-way and leave the state lying about what was on screen.
+    (button :class "dock-btn" :onclick "eww-state dock launch ${id}"
+      ;; Fixed-size cell with the icon centred, so nothing a tile does can
+      ;; move its neighbours.
+      (box :class "dock-cell" :halign "center" :valign "center"
+        (box :class "dock-icon" :halign "center" :valign "center"
+             :style "background-image: url('${icon}');")))))
+
+;; Windows put away in the dock. macOS keeps these past the separator, to the
+;; right of every app and in the order they were minimized, and draws the window
+;; itself rather than its app icon — the icon is badged on the corner so it is
+;; still obvious what the tile belongs to. The daemon photographs a window on
+;; its way out, which is the only moment there is anything left to photograph.
+(defvar dock_minimized "[]")
+
+(defwidget minimized [addr thumb icon title width]
+  ;; The one window command that names a window: a minimized one is not the
+  ;; focused window and, being off screen entirely, never can be.
+  (button :class "dock-btn" :tooltip title
+          :onclick "eww-state window restore ${addr}"
+    ;; Sized by the daemon, not the stylesheet: a tile is as wide as the
+    ;; window was, drawn at the tile height, and GTK sizes a box long before
+    ;; it knows anything about the image about to be painted into it.
+    (box :class "dock-cell" :halign "center" :valign "center"
+         :style "min-width: ${width}px;"
+      (box :class "dock-thumb" :halign "center" :valign "center"
+           :style "background-image: url('${thumb}'); min-width: ${width}px;"
+        (box :class "dock-badge" :halign "end" :valign "end"
+             :style "background-image: url('${icon}');")))))
+
+(defwidget dock []
+  ;; The `for` lives in its own box on purpose. eww appends the widgets a `for`
+  ;; produces to the parent AFTER the siblings written below it, so with the
+  ;; loop as a direct child the separator came out at the left-hand end of the
+  ;; dock, in front of every app. Giving the loop a container of its own makes
+  ;; this box's children static, and static children keep the order they are
+  ;; written in.
+  (box :class "dock ${theme}" :space-evenly false :valign "center" :spacing 0
+    (box :class "dock-apps" :space-evenly false :spacing 0
+      (for a in {dock_apps}
+        (applaunch :id {a.id} :icon {a.icon})))
+    ;; The separator only divides something when there is something on its
+    ;; right: with no window put away it is the dock's last child, a hairline
+    ;; hanging off the end of the apps.
+    (box :class "dock-sep" :valign "center" :vexpand false
+         :visible {arraylength(dock_minimized) > 0})
+    ;; Its own box for the same reason the app loop has one.
+    (box :class "dock-minimized" :space-evenly false :spacing 0
+      (for m in {dock_minimized}
+        (minimized :addr {m.addr} :thumb {m.thumb} :icon {m.icon}
+                   :title {m.title} :width {m.width})))))
+
+(defwindow dock
+  :monitor 0
+  ;; 5pt of desktop below the slab, measured: the Dock's bottom edge is at
+  ;; y=1075 on a 1080pt screen.
+  ;; 5pt of desktop below the slab x 1.25 scale. eww resolves defwindow
+  ;; geometry statically — a variable here is "Unknown variable" at open time —
+  ;; so these are literals. KEEP IN SYNC with $ui-scale in metrics.scss.
+  :geometry (geometry :y "6px" :anchor "bottom center")
+  :stacking "overlay"
+  :exclusive false
+  :focusable false
+  ;; Its own namespace so the Hyprland slide rule can reach the dock without
+  ;; also catching the menus, which share the default gtk-layer-shell one.
+  ;; KEEP IN SYNC with the layer rules in ~/.config/hypr/hyprland.lua.
+  :namespace "eww-dock"
+  (dock))
+
+;; The same dock, dropped until only its top edge shows, for when the windows
+;; below it are tiled rather than floating and it would otherwise sit on top of
+;; one. eww-state opens this one or the plain dock, never both.
+;; -55px = 10 - 65: the slab is 65px tall ($dock-tile 44 + 4px padding each side,
+;; x $ui-scale 1.25), and 10px of it stays on screen, which puts its top edge
+;; exactly halfway between the bottom of a tiled window and the bottom of the
+;; screen. The 10 is the half-gap and does not move; the 65 does, so KEEP IN SYNC
+;; with $dock-tile in ~/.config/eww/metrics.scss -- eww resolves defwindow
+;; geometry statically and CSS cannot reach it. Also KEEP IN SYNC with
+;; general:gaps_out (20) and general:border_size (1) in
+;; ~/.config/hypr/config/options.lua -- a tiled window's bottom edge is 21px up
+;; from the screen's.
+(defwindow dock-low
+  :monitor 0
+  :geometry (geometry :y "-55px" :anchor "bottom center")
+  :stacking "overlay"
+  :exclusive false
+  :focusable false
+  ;; Its own namespace, not the dock's: it has to be told apart from the plain
+  ;; dock by the Hyprland rules, or swapping the two plays a slide out and a
+  ;; slide in at once and the dock looks like it bounced.
+  :namespace "eww-dock-low"
+  (dock))

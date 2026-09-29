@@ -1,0 +1,105 @@
+;; macOS's Sound and Display panels: a title, then a pill track whose filled
+;; part is WHITE with the glyph knocked out of it in dark, and a round white
+;; knob at the value. Not an accent-coloured bar — measured off
+;; control-center/sound-panel.png, where the fill samples #ffffff, the unfilled
+;; track #434344, and the track is 22pt tall with a 22pt knob.
+;;
+;; The daemon shows the requested value immediately and lets the probe confirm
+;; it later, so a poll already in flight cannot snap the knob back mid-drag.
+(defvar vol_pct "0")
+(defvar bri_pct "0")
+
+;; The glyph sits on the white fill, so it has to be the dark ink in BOTH
+;; appearances — the daemon's own icon path follows the theme and would be white
+;; on white in dark mode. The light set is exactly the dark-ink set, so the path
+;; is rewritten rather than adding a second variable for it.
+(defwidget slider-panel [title icon value onchange]
+  (box :class "menu ${theme}" :orientation "vertical" :space-evenly false
+    (box :class "islider-head" :valign "center"
+      (label :class "menu-title" :text title :halign "start" :hexpand true))
+    (box :class "islider ${theme}"
+      (overlay
+        ;; :timeout must beat eww's 200ms default, or a slow set is SIGKILLed
+        ;; mid-write. It never gets close now — the handler is a socket write.
+        ;; :max 101, not 100. eww builds every scale on a GtkAdjustment with a
+        ;; page_size of 1 (widget_definitions.rs, `Adjustment::new(0, 0, 100, 1,
+        ;; 1, 1)`) and :max only sets the adjustment's upper — and GTK caps a
+        ;; value at `upper - page_size`. With :max 100 the last percent was
+        ;; unreachable by dragging: the end of the track set 99, and the knob
+        ;; stopped 3px short of the end. The daemon clamps to 100 either way.
+        (scale :class "islider-input" :hexpand true :value value :min 0 :max 101
+               :round-digits 0 :timeout "2s" :onchange onchange)
+        (box :class "islider-track" :valign "center")
+        (box :class "islider-fill" :halign "start" :valign "center"
+             :style "min-width: ${27.5 + value * 3.1}px;")
+        ;; The fraction of the 248pt travel (270pt of track less the 22pt
+        ;; knob), in px — the 14pt inset is already on .islider. The panel is a
+        ;; fixed 298pt wide, so this is arithmetic, not something GTK solves.
+        (box :class "islider-knob" :halign "start" :valign "center"
+             :style "margin-left: ${value * 3.1}px;")
+        (box :class "islider-icon" :halign "start" :valign "center"
+             :style "background-image: url('${replace(icon, "/dark/", "/light/")}');")))
+    ;; Anything a caller hangs under the slider — the Volume panel's output
+    ;; list. Display passes nothing and the panel is unchanged.
+    (children)))
+
+;; The Sound panel's output list — where sound is going, and the other places
+;; it could go. `vol_outputs` is published by eww-state, which lists the sinks
+;; only while this panel is open: off screen nothing shows them and the listing
+;; is the expensive half of that module.
+;;
+;; Per entry: `id_b64` is the sink to switch to, encoded because a sink name
+;; comes off the hardware and reaches the handler inside a shell command.
+;; `name` is the device's own short name (node.nick — "Speaker", "HDMI 1" —
+;; rather than the codec's "Core Ultra Processors (Series 3) HD Audio Speaker"),
+;; and `icon` is already the right glyph for whether the row is the active one,
+;; so this file never picks between two. A sink whose port reads "not available"
+;; is not in the list at all: that is what keeps this machine's five permanent
+;; HDMI sinks out of a panel where nothing is plugged in.
+(defvar vol_outputs "[]")
+
+;; Same row grammar as the Wi-Fi and Bluetooth lists — a 23pt leading circle
+;; that fills with the accent on the output in use, then the name. No scroll: a
+;; machine has a handful of sinks, not fifty networks, so the list is its own
+;; height and the panel grows with it.
+(defwidget vol-outputs []
+  (box :orientation "vertical" :space-evenly false
+       :visible {arraylength(vol_outputs) > 0}
+    (box :class "sep out-sep")
+    (label :class "menu-section" :text "Output" :halign "start")
+    (box :orientation "vertical" :space-evenly false
+      (for o in vol_outputs
+        ;; Clicking leaves the menu open, like Bluetooth and unlike Wi-Fi: the
+        ;; tick moving to the row you pressed is the confirmation, and that is
+        ;; worth staying to watch.
+        (button :class "row" :onclick "eww-state volume output ${o.id_b64}"
+          (box :space-evenly false :spacing 8 :valign "center"
+            (box :class "row-mark disc ${o.active ? 'on' : 'off'}" :valign "center"
+                 :halign "center"
+              (box :class "row-glyph" :halign "center" :valign "center"
+                   :style "background-image: url('${o.icon}');"))
+            (label :class "row-name" :text {o.name} :halign "start" :hexpand true
+                   :limit-width 26 :show-truncated true)))))))
+
+(defwidget vol-slider []
+  (slider-panel :title "Volume" :icon vol_icon :value vol_pct
+                :onchange "eww-state volume set {}"
+    (vol-outputs)))
+
+(defwidget bri-slider []
+  (slider-panel :title "Display" :icon bri_icon :value bri_pct
+                :onchange "eww-state brightness set {}"))
+
+(defwindow volume-menu
+  ;; 8 / 4 / 298 pt x 1.25. The Sound panel measures the same 298 wide as the
+  ;; Wi-Fi and Bluetooth ones — panel edges at x 12 and 310 in sound-panel.png.
+  :monitor 0 :geometry (geometry :anchor "top right" :x "10px" :y "5px" :width "373px")
+  :stacking "overlay" :focusable false
+  (vol-slider))
+
+(defwindow brightness-menu
+  ;; 8 / 4 / 298 pt x 1.25. The Sound panel measures the same 298 wide as the
+  ;; Wi-Fi and Bluetooth ones — panel edges at x 12 and 310 in sound-panel.png.
+  :monitor 0 :geometry (geometry :anchor "top right" :x "10px" :y "5px" :width "373px")
+  :stacking "overlay" :focusable false
+  (bri-slider))

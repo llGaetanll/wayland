@@ -1,0 +1,101 @@
+// The Sound / Display panels. macOS draws a pill track whose filled part is
+// white with the glyph knocked out of it, and a round white knob at the value —
+// not an accent-coloured bar. Every number is off control-center/sound-panel.png:
+// the track is 22pt tall (so an 11pt radius), the fill samples #ffffff and the
+// unfilled track #434344, which against that panel's fill is white at ~0.22.
+.islider-head {
+  padding: 0 14px * $ui-scale;
+  min-height: 26px * $ui-scale;
+}
+// 14pt sides, to line the track up with the title above it. It has to be a
+// `margin` on a box wrapping the overlay: GtkOverlay hands its children its
+// whole area, and GtkBox ignores its own CSS padding when allocating a child,
+// so padding on either of them left the track running edge to edge.
+// The Output list hangs off the slider, so its separator needs the gap the
+// slider's own bottom margin does not give it.
+.out-sep { margin-top: 8px * $ui-scale; }
+
+.islider { margin: 0 14px * $ui-scale 4px * $ui-scale 14px * $ui-scale; }
+
+.islider-input {
+  margin: 0;
+  padding: 0;
+  // The GtkScale is nothing but the hit target now — every painted part of the
+  // control is an overlay box. The trough is inset by half a knob at each end
+  // because GTK maps the pointer across the WHOLE trough while the knob travels
+  // the track less its own width: without the inset, dragging until the knob
+  // looked flush with the end only reached 96, and the last half-knob of value
+  // was only reachable by pushing the pointer past the knob.
+  trough {
+    min-height: 22px * $ui-scale;
+    background-color: transparent;
+    margin: 0 11px * $ui-scale;
+    padding: 0;
+  }
+  // Transparent: GTK ends the highlight at the value's fraction of the WHOLE
+  // trough, while the knob's centre travels the trough less its own width, so
+  // the two edges drift apart by up to half a knob between the ends. The fill
+  // is .islider-fill instead, sized off the same arithmetic as the knob.
+  highlight {
+    background-color: transparent;
+    min-height: 22px * $ui-scale;
+    margin: 0;
+    padding: 0;
+  }
+  // GTK3 centres the range's slider ON the value position instead of keeping it
+  // inside the trough, so a visible GTK knob hangs half off both ends of the
+  // track (at 100% it was cut by the panel edge). The GTK one is kept 1px and
+  // invisible — the white circle is .islider-knob, an overlay box the yuck
+  // places from the value, where the travel is exactly track minus knob.
+  // 1px, not 0: a zero-width slider makes GTK allocate the highlight no width
+  // at all and the fill never renders.
+  slider {
+    min-width: 1px;
+    min-height: 22px * $ui-scale;
+    background-color: transparent;
+    border: none;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+// The unfilled track, which the trough used to paint before it was inset.
+.islider-track {
+  min-height: 22px * $ui-scale;
+  border-radius: 11px * $ui-scale;
+}
+.islider.light .islider-track { background-color: rgba(0, 0, 0, 0.18); }
+.islider.dark  .islider-track { background-color: rgba(255, 255, 255, 0.22); }
+
+// The white part of the track: from the start of the track to the knob's far
+// edge, so the two always meet however the knob is dragged.
+.islider-fill {
+  min-height: 22px * $ui-scale;
+  border-radius: 11px * $ui-scale;
+  background-color: #ffffff;
+}
+
+// 22pt round knob. Its left edge travels 0 -> track width minus its own width,
+// so at 100% it stops flush with the end of the track.
+.islider-knob {
+  min-width: 22px * $ui-scale;
+  min-height: 22px * $ui-scale;
+  border-radius: 11px * $ui-scale;
+  background-color: #ffffff;
+  // A hairline down the leading edge to part it from the fill (both are white),
+  // plus a soft drop shadow, which falls on the unfilled track and the panel
+  // rather than on the fill and so does not read as a notch behind the knob.
+  box-shadow: -1px 0 0 rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.32);
+}
+// Knocked out of the white fill, so it is the dark ink in both appearances —
+// the widget is handed the light icon set for exactly that reason.
+.islider-icon {
+  min-width: 18.75px * $ui-scale;       // 15 * 20/16, the glyph canvas aspect
+  min-height: 15px * $ui-scale;
+  // 17 less the 1.875pt of transparent margin the wider canvas puts on the
+  // glyph's left, so the ink still starts where it did.
+  margin-left: 15.125px * $ui-scale;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}

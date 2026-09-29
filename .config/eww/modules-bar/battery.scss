@@ -1,0 +1,80 @@
+// The Battery panel. See modules-bar/battery.yuck.
+//
+// It reuses .menu, .sep, .menu-section, .row and .row-name wholesale; only what
+// this panel adds is below. Every number is the panel grid the others are on:
+// 14pt content inset, 26pt rows, 42pt head.
+.batt-menu { padding-bottom: 8px * $ui-scale; }
+
+// The percentage, the one figure worth reading from across the desk. Same
+// weight as the title so the head reads as one line, a size up.
+.batt-big {
+  font-size: 15px * $ui-scale;
+  font-weight: 600;
+}
+
+// The three key/value lines under the head. 20pt rows rather than 26 — these
+// are text, not hit targets, and a row's height is there to be clicked.
+.batt-lines {
+  padding: 0 14px * $ui-scale 8px * $ui-scale 14px * $ui-scale;
+}
+.batt-lines > box { min-height: 20px * $ui-scale; }
+
+.batt-key {
+  font-size: 12px * $ui-scale;
+  .menu.light & { color: rgba(0, 0, 0, 0.55); }
+  .menu.dark  & { color: rgba(255, 255, 255, 0.55); }
+}
+.batt-val {
+  font-size: 12px * $ui-scale;
+  &.strong { font-weight: 600; }
+}
+
+// The chart. Fixed height, width from the panel; the SVG is authored at exactly
+// 338x86 so `contain` never scales it — the same rule the bar's pill follows,
+// and the reason both stay sharp.
+.batt-graph {
+  min-height: 86px * $ui-scale;
+  margin: 0 14px * $ui-scale;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+
+// The app rows. No :hover — they are not buttons, and a highlight that follows
+// the pointer onto something unclickable is a lie about what the row does.
+.batt-row { min-height: 28px * $ui-scale; }
+
+// The leading column, on the 23pt the Wi-Fi and Sound panels give their circle,
+// so every name in every panel starts on the same x. These are raster app icons
+// off the dock, so the box is square and `contain` never scales one up.
+.batt-app-icon {
+  min-width: 23px * $ui-scale;
+  min-height: 23px * $ui-scale;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+
+// The two trailing columns. The width is on the boxes and the text is pushed to
+// their end, so the digits line up down the list instead of ragging with the
+// name lengths — a column of percentages is only comparable at a glance if it
+// is a column. The share column ends on the row's own inset, which is the 14pt
+// the graph above is margined by, so the last digit and the chart's right edge
+// share an x.
+.batt-uptime-col { min-width: 46px * $ui-scale; }
+.batt-share-col  { min-width: 32px * $ui-scale; }
+
+.batt-uptime {
+  font-size: 11px * $ui-scale;
+  .menu.light & { color: rgba(0, 0, 0, 0.45); }
+  .menu.dark  & { color: rgba(255, 255, 255, 0.45); }
+}
+.batt-share {
+  font-size: 12px * $ui-scale;
+  font-weight: 600;
+}
+
+.batt-foot {
+  padding: 8px * $ui-scale 14px * $ui-scale 0 14px * $ui-scale;
+  min-height: 20px * $ui-scale;
+}
