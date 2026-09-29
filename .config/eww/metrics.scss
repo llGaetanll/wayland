@@ -23,4 +23,8 @@ $ui-scale: 1.25;
 // and the ratio against the 24pt menu bar is the same 1.75 either way, which is
 // why the dock reads as small next to the bar rather than out of proportion to
 // it. Raise this alone to grow the dock without touching the bar.
+//
+// KEEP IN SYNC: the `dock-low` geometry in eww.yuck. That window drops the slab
+// until only 10px shows, so its offset is 10 - (this + 8) * $ui-scale, and eww
+// resolves defwindow geometry statically -- CSS cannot reach it.
 $dock-tile: 44px;

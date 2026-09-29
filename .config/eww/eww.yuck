@@ -101,14 +101,18 @@
 ;; The same dock, dropped until only its top edge shows, for when the windows
 ;; below it are tiled rather than floating and it would otherwise sit on top of
 ;; one. eww-state opens this one or the plain dock, never both.
-;; -43px = 10 - 53: the slab is 53px tall, and 10px of it stays on screen, which
-;; puts its top edge exactly halfway between the bottom of a tiled window and
-;; the bottom of the screen. KEEP IN SYNC with general:gaps_out (20) and
-;; general:border_size (1) in ~/.config/hypr/config/options.lua -- a tiled
-;; window's bottom edge is 21px up from the screen's.
+;; -55px = 10 - 65: the slab is 65px tall ($dock-tile 44 + 4px padding each side,
+;; x $ui-scale 1.25), and 10px of it stays on screen, which puts its top edge
+;; exactly halfway between the bottom of a tiled window and the bottom of the
+;; screen. The 10 is the half-gap and does not move; the 65 does, so KEEP IN SYNC
+;; with $dock-tile in ~/.config/eww/metrics.scss -- eww resolves defwindow
+;; geometry statically and CSS cannot reach it. Also KEEP IN SYNC with
+;; general:gaps_out (20) and general:border_size (1) in
+;; ~/.config/hypr/config/options.lua -- a tiled window's bottom edge is 21px up
+;; from the screen's.
 (defwindow dock-low
   :monitor 0
-  :geometry (geometry :y "-43px" :anchor "bottom center")
+  :geometry (geometry :y "-55px" :anchor "bottom center")
   :stacking "overlay"
   :exclusive false
   :focusable false
