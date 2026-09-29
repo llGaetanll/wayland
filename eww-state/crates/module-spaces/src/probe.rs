@@ -47,6 +47,7 @@ fn parse_clients(out: &str) -> Vec<Client> {
                 workspace: WorkspaceId::default(),
                 workspace_name: String::new(),
                 fullscreen: false,
+                floating: false,
                 monitor: 0,
                 geometry: Rect::default(),
                 class: String::new(),
@@ -74,6 +75,7 @@ fn parse_clients(out: &str) -> Vec<Client> {
             // A mode, not a flag: 0 is neither maximized nor fullscreen, and
             // every other value is the user asking to fill the screen.
             "fullscreen" => client.fullscreen = first != "0",
+            "floating" => client.floating = first != "0",
             "monitor" => client.monitor = first.parse().unwrap_or(0),
             "at" => (client.geometry.x, client.geometry.y) = pair(value),
             "size" => (client.geometry.width, client.geometry.height) = pair(value),
@@ -144,6 +146,7 @@ Window 558156ab0980 -> 1:eww-state:
 \tmonitor: 0
 \tclass: Alacritty
 \ttitle: 1:eww-state
+\tfloating: 0
 \tfullscreen: 1
 \tfullscreenClient: 1
 
@@ -154,6 +157,7 @@ Window 5581569f1230 -> Firefox:
 \tmonitor: 0
 \tclass: firefox
 \ttitle: Mozilla Firefox
+\tfloating: 1
 \tfullscreen: 0
 ";
 
@@ -170,6 +174,14 @@ Window 5581569f1230 -> Firefox:
             !clients[1].fullscreen,
             "an ordinary window is not in a Space"
         );
+    }
+
+    /// Which windows are tiled into the layout and which float over it.
+    #[test]
+    fn a_window_says_whether_it_floats() {
+        let clients = parse_clients(CLIENTS);
+        assert!(!clients[0].floating, "tiled into the layout");
+        assert!(clients[1].floating);
     }
 
     /// A special workspace is recognised by name, because its id is whatever

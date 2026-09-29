@@ -390,6 +390,7 @@ impl World {
             workspace: self.focused,
             workspace_name: self.focused.to_string(),
             fullscreen: false,
+            floating: true,
             monitor: 0,
             geometry: Rect {
                 x: 0,
@@ -400,6 +401,17 @@ impl World {
             class: "firefox".to_string(),
             title: "Mozilla Firefox".to_string(),
         });
+        self.compositor_moved()
+    }
+
+    /// The user switched a window between tiled and floating.
+    pub fn set_tiled(&mut self, addr: &str, on: bool) -> &mut World {
+        let addr = WindowAddr::parse(addr).expect("an address");
+        for c in &mut self.clients {
+            if c.addr == addr {
+                c.floating = !on;
+            }
+        }
         self.compositor_moved()
     }
 

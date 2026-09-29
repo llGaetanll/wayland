@@ -258,7 +258,14 @@ impl StateBar {
         // owns Spaces is asked rather than a copy of the answer kept here.
         if !self.spaces.fullscreen() {
             w.insert(Window::Bar);
-            w.insert(Window::Dock);
+            // Which dock: the low one peeks out from under a tiled window
+            // instead of covering its bottom edge. Asked of the module that
+            // owns the layout, for the same reason fullscreen is.
+            w.insert(if self.spaces.tiled() {
+                Window::DockLow
+            } else {
+                Window::Dock
+            });
         }
         if let Some(m) = self.menu {
             w.insert(Window::Menu(m));

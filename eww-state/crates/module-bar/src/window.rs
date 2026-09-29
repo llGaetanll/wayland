@@ -16,6 +16,10 @@ use crate::menu::MenuId;
 pub enum Window {
     Bar,
     Dock,
+    /// The same dock, dropped below the bottom of the screen until only its top
+    /// edge shows. Two windows rather than one that moves, because eww resolves
+    /// a window's geometry when it is defined and never again.
+    DockLow,
     /// Full-screen click-catcher shared by every bar dropdown.
     MenuBackdrop,
     Menu(MenuId),
@@ -34,6 +38,7 @@ impl Window {
         match self {
             Window::Bar => "bar".into(),
             Window::Dock => "dock".into(),
+            Window::DockLow => "dock-low".into(),
             Window::Menu(m) => m.window(),
             Window::MenuBackdrop => "menu-backdrop".into(),
             Window::Shot => "shot-menu".into(),
@@ -47,7 +52,12 @@ impl Window {
     /// startup before opening the desired set, so a leftover surface from a
     /// previous daemon cannot survive as an unreapable orphan.
     pub fn all() -> Vec<Window> {
-        let mut v = vec![Window::Bar, Window::Dock, Window::MenuBackdrop];
+        let mut v = vec![
+            Window::Bar,
+            Window::Dock,
+            Window::DockLow,
+            Window::MenuBackdrop,
+        ];
         v.extend(MenuId::ALL.into_iter().map(Window::Menu));
         v.push(Window::Shot);
         v.push(Window::ShotBackdrop);

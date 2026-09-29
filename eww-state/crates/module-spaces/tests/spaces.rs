@@ -33,6 +33,9 @@ fn client(a: &str, workspace: i32, fullscreen: bool) -> Client {
         workspace: WorkspaceId(workspace),
         workspace_name: workspace.to_string(),
         fullscreen,
+        // This desktop floats every window by default; the tests that care
+        // about tiling say so themselves.
+        floating: true,
         monitor: 0,
         geometry: Rect {
             x: 10,

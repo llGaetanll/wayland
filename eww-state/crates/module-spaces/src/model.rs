@@ -71,6 +71,10 @@ pub struct Client {
     /// different numbers. Both count: either one is the user asking for the
     /// window to fill the screen, which is what a Space is for.
     pub fullscreen: bool,
+    /// Whether the window floats over the layout rather than being tiled into
+    /// it. The dock sits in front of a tiled window's bottom edge and behind a
+    /// floating one, which is the only reason this is here.
+    pub floating: bool,
     /// Which monitor it is on. Nothing reads it yet — there is one screen — but
     /// a rule that comes to need it should have to say so, rather than inherit
     /// an assumption nobody wrote down.
@@ -128,6 +132,14 @@ impl Snapshot {
         self.clients
             .iter()
             .any(|c| c.workspace == self.focused && c.fullscreen)
+    }
+
+    /// The focused workspace holds a tiled window, so something on screen has
+    /// an edge the dock would cover.
+    pub fn tiled(&self) -> bool {
+        self.clients
+            .iter()
+            .any(|c| c.workspace == self.focused && !c.floating)
     }
 }
 

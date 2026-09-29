@@ -134,6 +134,16 @@ impl StateSpaces {
         self.layout.fullscreen()
     }
 
+    /// The focused workspace holds a tiled window, so the dock should drop to
+    /// the peek it keeps below the screen rather than sit on top of that
+    /// window's bottom edge.
+    ///
+    /// Derived from the same look as everything else here, so the dock cannot
+    /// be told a layout the Space rules disagree with.
+    pub fn tiled(&self) -> bool {
+        self.layout.tiled()
+    }
+
     /// This window is in a Space of its own.
     pub fn in_space(&self, addr: &WindowAddr) -> bool {
         self.origins.contains_key(addr)

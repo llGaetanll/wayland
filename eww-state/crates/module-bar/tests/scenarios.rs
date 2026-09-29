@@ -369,6 +369,34 @@ fn bar_and_dock_never_get_stranded_by_fullscreen() {
     }
 }
 
+/// A tiled window owns its bottom edge, so the dock trades places with the
+/// copy of itself that sits below the screen.
+#[test]
+fn the_dock_drops_below_a_tiled_window() {
+    let mut w = World::new();
+    w.open_window("0xa");
+    assert_eq!(w.windows(), ["bar", "dock"]);
+
+    w.set_tiled("0xa", true);
+    assert_eq!(w.windows(), ["bar", "dock-low"], "never both docks");
+
+    w.set_tiled("0xa", false);
+    assert_eq!(w.windows(), ["bar", "dock"]);
+}
+
+/// Hiding for a fullscreen Space wins over the tiled position: neither dock is
+/// on screen there.
+#[test]
+fn a_fullscreen_space_hides_the_low_dock_too() {
+    let mut w = World::new();
+    w.open_window("0xa");
+    w.set_tiled("0xa", true);
+    assert_eq!(w.windows(), ["bar", "dock-low"]);
+
+    w.set_fullscreen("0xa", true);
+    assert!(w.windows().is_empty());
+}
+
 /// Fullscreen is a Space of its own: the window leaves the workspace it was on
 /// and comes back to it, which is what the bar hiding is really following.
 #[test]
