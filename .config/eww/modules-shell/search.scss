@@ -1,15 +1,10 @@
-// The launcher. Reuses the .menu card so it is the same material as the bar
-// dropdowns, with rofi's Spotlight proportions: a 640px panel, a large field,
-// and a thin divider that only appears once there is a list under it.
-//
-// Sized in raw px rather than `* $ui-scale`, because these numbers are not
-// measured off the macOS captures — they are what the rofi theme this replaces
-// used (~/.config/rofi/themes/spotlight.rasi), and matching it exactly is what
-// keeps the swap invisible.
+// The launcher. Reuses the .menu card for the bar dropdowns' material, with
+// rofi's Spotlight proportions. Sized in raw px rather than `* $ui-scale`: these
+// are not measured off the macOS captures, they are the rofi theme this replaces
+// (~/.config/rofi/themes/spotlight.rasi), and matching it keeps the swap invisible.
 .search { padding: 0; }
 .search-field { padding: 16px 22px; }
-// A GtkEntry paints its own background and frame, and both have to go or the
-// field sits in a white box in the middle of the panel.
+// A GtkEntry paints its own background and frame; both have to go.
 .search-input {
   font-family: "Inter", sans-serif;
   font-size: 20px;
@@ -22,8 +17,7 @@
   .menu.light & { color: #000000; }
   .menu.dark  & { color: #ffffff; }
 }
-// GTK draws the placeholder and the selection from these, not from the text
-// colour above.
+// GTK draws the selection from these, not from the text colour above.
 .menu.light .search-input selection { background-color: $accent; color: #ffffff; }
 .menu.dark  .search-input selection { background-color: $accent; color: #ffffff; }
 
@@ -37,8 +31,8 @@
   .menu.light & { background-color: rgba(0, 0, 0, 0.07); }
   .menu.dark  & { background-color: rgba(255, 255, 255, 0.10); }
 }
-// The keyboard highlight, which is not the same thing as hover: it has to be
-// visible with the pointer somewhere else entirely.
+// The keyboard highlight, not the same thing as hover: it has to be visible with
+// the pointer somewhere else entirely.
 .search-row.sel {
   .menu.light & { background-color: rgba(0, 0, 0, 0.12); }
   .menu.dark  & { background-color: rgba(255, 255, 255, 0.16); }
@@ -58,9 +52,8 @@
   .menu.dark  & { color: rgba(255, 255, 255, 0.45); }
 }
 
-// The prompt laid over an empty field. Same font and size as the entry so it
-// sits exactly where the first character will, and dimmed to rofi's
-// placeholder colour — it is a hint, not content.
+// Same font and size as the entry, so it sits exactly where the first character
+// will, dimmed to rofi's placeholder colour.
 .search-prompt {
   font-family: "Inter", sans-serif;
   font-size: 20px;

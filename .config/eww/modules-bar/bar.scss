@@ -1,34 +1,23 @@
-// The menu bar is 24 points tall. The capture strip is 30 tall, but the bottom
-// 6 of it is wallpaper: the median row colour steps from #020711 to #050911 at
-// exactly y=24, and every glyph in the bar centres on y=12, not y=15.
+// The menu bar is 24 points tall (the capture strip is 30, but its bottom 6 are
+// wallpaper — every glyph centres on y=12).
 .bar {
   padding: 0 18px * $ui-scale 0 0;      // clock ink stops 19pt from the screen edge
   font-family: "Inter", sans-serif;
-  // 13px, chosen by measurement rather than by matching a nominal size: macOS
-  // sets the menu bar in SF Pro, we have Inter, and the two do not share
-  // advance widths. tools/fontsweep.py renders "Fri Aug 28" in every installed
-  // sans at every size and scores its ink against the macOS crop; Inter at 13
-  // wins on shape (76% IoU) and lands the string at 62pt against macOS's 61.
-  // At 14px the same string comes out 67-70pt, which is visibly loose.
+  // 13px by measurement, not by matching SF Pro's nominal size: Inter at 13 is
+  // what tools/fontsweep.py scores best against the macOS crop. 14px is loose.
   font-size: 13px * $ui-scale;
 }
-// macOS sets the menu bar clock in the regular weight, not medium. Inter is a
-// touch wider than SF Pro, so the same string comes out 109pt against macOS's
-// 104; a hair of negative tracking closes that without shrinking the type and
-// losing the 10pt cap height.
+// Regular weight, not medium, as macOS does.
 .bar-clock {
   margin-left: 4px * $ui-scale;         // last icon ink to clock ink measures 13.5pt
-  // NB: do NOT add `font-feature-settings` here for tabular figures. GTK3's CSS
-  // parser rejects the property and eww then drops the ENTIRE stylesheet, not
-  // just that declaration — every surface silently falls back to the Adwaita
-  // defaults and the bar grows from 24px to 34px. Verified 2026-08-28.
+  // Do NOT add `font-feature-settings` for tabular figures: GTK3's CSS parser
+  // rejects it and eww then drops the ENTIRE stylesheet, dumping every surface
+  // back to Adwaita defaults. Verified 2026-08-28.
 }
 
-// 20x16, not a 16pt square: mkicons.py draws every glyph on a 20x16 canvas,
-// because the widest of them (speaker.wave.3, the wifi arcs) run past 16 units
-// once they are scaled to their measured height, and a square viewBox cut them
-// off inside the file. The box has to keep the canvas aspect or `contain` fits
-// the glyph to the wrong axis and draws it short.
+// 20x16, not a 16pt square: mkicons.py needs the extra width for the widest
+// glyphs (speaker.wave.3, the wifi arcs), and the box has to keep the canvas
+// aspect or `contain` fits the glyph to the wrong axis and draws it short.
 // KEEP IN SYNC: CANVAS_W/CANVAS_H in ~/macos-match/tools/mkicons.py.
 .status-icon {
   min-width: 20px * $ui-scale;
@@ -38,15 +27,11 @@
   background-size: contain;
 }
 
-// The battery is not a 16pt square: macOS draws it 25.5 x 12, and the SVG the
-// daemon generates has exactly that viewBox.
-// GTK paints a background over the border box, padding included, so `contain`
-// here sized the glyph to the padded box and drew it 29pt wide instead of 25.5.
-// Pinning both axes is the fix; the numbers are the SVG's own viewBox, which is
-// the macOS glyph's measured 25.5 x 12.
+// The battery is 25.5 x 12, the viewBox of the SVG the daemon generates, and
+// both axes are pinned: GTK paints a background over the padded border box, so
+// `contain` alone sized the glyph to that and drew it 29pt wide.
 .batt-slot { padding: 4px * $ui-scale 10px * $ui-scale; }
-// macOS sets the menu bar percentage in the same face and size as the clock,
-// with 4pt between the number's ink and the pill's left cap.
+// Same face and size as the clock, 4pt from the pill's left cap.
 .batt-pct { margin-right: 4px * $ui-scale; }
 .batt-icon {
   min-width: 26px * $ui-scale;
@@ -56,37 +41,23 @@
   background-size: contain;
 }
 
-// 10px each side puts 20pt between the ink of neighbouring icons, which is the
-// spacing macOS uses (measured 20.5 / 21.0 / 20.0 / 20.0 across the four system
-// items). The padding is inside the button, so the gap stays clickable rather
-// than being a dead zone the pointer has to thread.
-// macOS puts 20pt between the ink of adjacent status items, and sizes each
-// item's frame to its own glyph. Our glyphs all sit in a 16px box instead, and
-// most of them do not fill it, so equal frame gaps would come out as unequal —
-// and on average too wide — ink gaps. 8px each side is the padding that lands
-// the measured mean back on 20. The padding is inside the button, so the gap
-// stays clickable rather than being a dead zone the pointer has to thread.
-// 8px each side, which runs the ink gap a little past the measured 20: the
-// tighter 6px that matched the mean exactly read as cramped next to macOS on
-// this panel, so the run is deliberately looser.
+// macOS runs 20pt between the ink of adjacent status items and sizes each frame
+// to its own glyph; ours all sit in a 16px box most of them do not fill, so the
+// padding is what lands the mean ink gap near 20. 8px rather than the 6px that
+// matched exactly — that read as cramped on this panel. Inside the button, so
+// the gap stays clickable rather than a dead zone the pointer has to thread.
 .sicon {
   padding: 4px * $ui-scale 8px * $ui-scale;
 }
 .sicon:hover { opacity: 0.6; }
 
-// The pill's button carries the click and nothing else: the padding that gives
-// it the run's spacing is on .batt-slot, where it is measured against the glyph.
+// Carries the click and nothing else; the spacing padding is on .batt-slot.
 .batt-btn { background-color: transparent; }
 .batt-btn:hover { opacity: 0.6; }
 
-// The bar is its own material, darker than the dock — in macOS these are not
-// the same surface and matching them was the old config's guess, not a
-// measurement.
-// #e7e7e7, not #ffffff: every glyph and the clock in menubar-full.png peaks at
-// luminance 231, which is macOS's dark-mode label colour. Pure white reads as
-// noticeably harder than the real thing next to it.
-// The hairline is bottom-only: the bar spans the full width with square
+// #e7e7e7, not #ffffff: macOS's dark-mode label colour, measured off
+// menubar-full.png. Pure white reads noticeably harder next to the real thing.
+// The hairline is bottom-only — the bar spans the full width with square
 // corners, so a full inset ring would draw a line down each screen edge too.
-// Same weight as the dock, the menus and the window border.
 .bar.light { background-color: $bar-light; color: #000000; box-shadow: inset 0 -1px 0 0 rgba(0, 0, 0, 0.12); }
 .bar.dark  { background-color: $bar-dark;  color: #e7e7e7; box-shadow: inset 0 -1px 0 0 rgba(255, 255, 255, 0.20); }

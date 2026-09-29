@@ -1,7 +1,6 @@
-;; Each status var is the path of the icon matching the current state, shown via
-;; background-image, so it reloads whenever the path changes. The battery pill is
-;; an SVG the daemon regenerates, with the capacity baked into its filename for
-;; the same reason.
+;; Each status var is the icon path for the current state, shown via
+;; background-image so it reloads when the path changes. The battery pill is an
+;; SVG the daemon regenerates, with the capacity baked into the filename.
 (defvar vol_icon "")
 (defvar bri_icon "")
 (defvar net_icon "")
@@ -9,31 +8,24 @@
 (defvar batt_icon "")
 (defvar batt_pct 0)
 
-;; :spacing 0 is deliberate — the gap comes from .sicon's padding instead, so it
-;; sits inside each button and stays clickable rather than being a dead zone.
+;; :spacing 0 is deliberate — the gap is .sicon's padding, so it sits inside each
+;; button and stays clickable rather than being a dead zone.
 (defwidget statusicons []
   (box :class "status" :space-evenly false :valign "center" :spacing 0
-    ;; macOS orders its system items speaker, Bluetooth, battery, Wi-Fi, and
-    ;; then the clock. Brightness has no menu bar item in macOS at all — it
-    ;; lives in Control Center — so it goes to the far left, out of the way of
-    ;; the run that has to read as the real thing.
+    ;; macOS order: speaker, Bluetooth, battery, Wi-Fi, clock. Brightness has no
+    ;; menu bar item there at all, so it goes to the far left, out of the way.
     (button :class "sicon" :onclick "eww-state menu toggle brightness"
       (box :class "status-icon" :style "background-image: url('${bri_icon}');"))
     (button :class "sicon" :onclick "eww-state menu toggle volume"
       (box :class "status-icon" :style "background-image: url('${vol_icon}');"))
     (button :class "sicon" :onclick "eww-state menu toggle bt"
       (box :class "status-icon" :style "background-image: url('${bt_icon}');"))
-    ;; valign center, or GTK gives this box the whole 16px row height and
-    ;; `background-size: contain` then scales the 25.5x12 glyph up to fit it,
-    ;; which comes out 4pt too wide.
-    ;; Two boxes: the outer one carries the same padding as a .sicon so the
-    ;; battery keeps the run's spacing, the inner one is exactly the glyph. GTK
-    ;; paints a background across the padding box, so a single box would size
-    ;; the glyph to the padded area and draw it several points too wide.
-    ;; The one status item that is a button wrapping its own box rather than a
-    ;; bare .sicon: the padding that gives it the run's spacing is on .batt-slot,
-    ;; measured against the glyph, and moving it onto the button would resize
-    ;; the pill. The button is transparent and only carries the click.
+    ;; valign center, or GTK gives the box the whole 16px row height and
+    ;; `background-size: contain` scales the 25.5x12 glyph 4pt too wide.
+    ;; Two boxes because GTK paints a background across the padding box: the
+    ;; outer carries the run's spacing, the inner is exactly the glyph. That
+    ;; padding stays on .batt-slot, where it is measured against the glyph;
+    ;; the button is transparent and only carries the click.
     (button :class "batt-btn" :onclick "eww-state menu toggle battery"
       (box :class "batt-slot" :valign "center" :space-evenly false :spacing 0
         (label :class "batt-pct" :valign "center" :text "${batt_pct}%")
@@ -50,9 +42,9 @@
       (statusicons)
       (label :class "bar-clock" :text clock))))
 
-;; :exclusive true reserves the 24px strip so windows sit below the bar rather
-;; than under it. Whether it is shown at all is the daemon's call: it watches the
-;; compositor and hides bar and dock together on a fullscreen Space.
+;; :exclusive true reserves the strip so windows sit below the bar, not under it.
+;; Whether it shows at all is the daemon's call: it hides bar and dock together
+;; on a fullscreen Space.
 (defwindow bar
   :monitor 0
   :geometry (geometry :x "0px" :y "0px" :width "100%"

@@ -1,13 +1,10 @@
-;; Every variable in these modules is pushed by `eww-state`, which owns all of
-;; this state and is the only thing allowed to write them or to open and close
-;; these windows. There is not a single defpoll left: what to sample and how
-;; often is a rule, so it lives in the daemon's state machine (`eww-state polls`
-;; prints the current plan). The initial values there are only what eww shows
-;; in the instant before the daemon's first push lands.
+;; Every variable here is pushed by `eww-state`, the only thing allowed to write
+;; them or to open and close these windows. No defpolls: what to sample and how
+;; often lives in the daemon's state machine (`eww-state polls` prints the plan),
+;; and the literals below are only what shows before the first push lands.
 ;;
-;; This file is only the table of contents. Every widget and window lives in a
-;; module file beside it: modules-bar/ for the menu bar and the dropdowns that
-;; hang off it, modules-shell/ for the standalone surfaces that do not.
+;; Table of contents only. modules-bar/ is the menu bar and its dropdowns,
+;; modules-shell/ the standalone surfaces.
 
 (include "util/globals.yuck")
 

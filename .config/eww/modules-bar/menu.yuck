@@ -1,15 +1,12 @@
-;; Which bar dropdown is open ("" = none). Only ever written by the daemon, whose
-;; state machine holds it as a single Option<MenuId> — so "two menus open at
-;; once" is not a value that exists. The screenshot preview below is deliberately
-;; outside this group: a Print press should not dismiss an open bar menu.
+;; Which bar dropdown is open ("" = none). The daemon holds it as a single
+;; Option<MenuId>, so "two menus open at once" is not a value that exists. The
+;; screenshot preview is deliberately outside this group.
 (defvar menu "")
 
-;; Full-screen click-catcher shared by every menu. eww windows don't close on
-;; focus loss, so a click outside lands here and dismisses whatever `menu` names.
-;; It's a button rather than a transparent eventbox because only a real widget
-;; has a solid input region; clicks fall through an eventbox. The distinct
-;; :namespace keeps the Hyprland blur rule off this surface — blurring a
-;; full-screen one every frame near-locks the machine.
+;; Full-screen click-catcher shared by every menu: eww windows don't close on
+;; focus loss. A button, not an eventbox — clicks fall through an eventbox, which
+;; has no solid input region. The distinct :namespace keeps the Hyprland blur rule
+;; off this surface; blurring a full-screen one every frame near-locks the machine.
 (defwindow menu-backdrop
   :monitor 0
   :geometry (geometry :width "100%" :height "100%" :anchor "center")

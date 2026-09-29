@@ -1,10 +1,7 @@
-;; Which fill of this table the daemon is looking at. The one var no widget
-;; uses: `eww reload` re-reads this file and puts every defvar back at the
-;; value written here, on the same process and the same socket, so nothing the
-;; daemon can see about the connection says its variables are gone. It stamps a
-;; number in here and reads it back — a table not carrying the current one is a
-;; table it publishes again from scratch. Leave it empty: the daemon never
-;; publishes a generation that reads as nothing.
+;; How the daemon detects `eww reload`, which resets every defvar to the literal
+;; here on the same process and socket, so the connection looks untouched. The
+;; daemon stamps a number here and reads it back; a table without the current one
+;; is republished from scratch. Leave it empty — the daemon never publishes "".
 (defvar eww_gen "")
 
 (defvar theme "light")

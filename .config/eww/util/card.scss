@@ -1,23 +1,17 @@
-// Metrics are off control-center/wifi-panel.png and bluetooth-panel.png, both
-// 2x shots of the real thing. These REPLACE the numbers the old comment here
-// took from reference/macos/*-tahoe.png: those were macOS 26 and this machine
-// is 15.7.9, and the two disagree about more than rounding — the toggle below
-// is a different shape entirely.
-//
-// Panel is 298pt wide, content is inset 14, the header is 42 tall, rows are 26
-// with a 23pt icon circle, and the separators run the full width. Row height is
-// also a daemon constant (ConfigWifi/ConfigBluetooth::row_height) because it
-// sizes the scroll area; the two have to agree.
+// Measured off control-center/wifi-panel.png and bluetooth-panel.png (15.7.9,
+// NOT the Tahoe reference shots — macOS 26 disagrees about more than rounding).
+// Panel 298pt wide, content inset 14, header 42 tall, rows 26 with a 23pt icon
+// circle, full-width separators.
+// KEEP IN SYNC: row height is also ConfigWifi/ConfigBluetooth::row_height in the
+// daemon, which sizes the scroll area.
 .menu {
   border-radius: 12px * $ui-scale;
   padding: 0 0 6px * $ui-scale 0;
   font-family: "Inter", sans-serif;
   font-size: 13px * $ui-scale;
 
-  // The panel's edge in the capture reads luminance 77 against a 34 fill: a
-  // hairline highlight, not a drawn line. An inset box-shadow rather than a
-  // `border`, so it does not eat a pixel of the 298pt width the metrics above
-  // are measured against.
+  // A hairline highlight, not a drawn line. Inset box-shadow rather than a
+  // `border`, so it does not eat a pixel of the measured 298pt width.
   &.light {
     background-color: $menu-light;
     color: #000000;
@@ -36,8 +30,7 @@
 }
 .menu-title { font-weight: 600; font-size: 13px * $ui-scale; }
 
-// "Known Network" / "Devices". macOS labels the list rather than letting it run
-// straight on from the title, and the label is smaller and dimmer than a row.
+// "Known Network" / "Devices" — smaller and dimmer than a row.
 .menu-section {
   font-size: 11px * $ui-scale;
   font-weight: 600;
@@ -51,8 +44,7 @@
   .menu.dark  & { color: rgba(255, 255, 255, 0.5); }
 }
 
-// Full width: the separator in the capture runs from panel edge to panel edge,
-// x 7 to 305, with no inset at either end.
+// Full width: no inset at either end.
 .sep {
   min-height: 1px;
   margin: 0;
@@ -60,13 +52,12 @@
   .menu.dark  & { background-color: rgba(255, 255, 255, 0.12); }
 }
 
-// Nothing on the scroll itself. eww's :height is the daemon's row count times
-// the row height, and GTK takes both padding and margin out of that allocation,
-// which leaves the last row sliced in half. The gap above and below the list
-// therefore hangs off the separator and the panel instead.
+// Nothing on .menu-scroll: eww's :height is rows x row height, and GTK takes
+// padding and margin out of that allocation, slicing the last row in half. The
+// gap above and below the list hangs off the separator and the panel instead.
 
-// 5px of margin plus 5px of padding keeps text on the same 10px inset as the
-// title while leaving the hover highlight inset from the panel edge.
+// 5px margin plus 5px padding keeps text on the title's 10px inset while leaving
+// the hover highlight inset from the panel edge.
 .row {
   min-height: 26px * $ui-scale;
   padding: 0 9px * $ui-scale;
@@ -78,8 +69,8 @@
   .menu.dark  & { background-color: rgba(255, 255, 255, 0.10); }
 }
 
-// The leading column. It keeps its size whether or not the circle is filled, so
-// every name in the list starts on the same x.
+// The leading column, sized whether or not the circle is filled, so every name
+// starts on the same x.
 .row-mark {
   min-width: 23px * $ui-scale;
   min-height: 23px * $ui-scale;
@@ -87,17 +78,14 @@
   &.on { background-color: $accent; }
 }
 // Bluetooth fills the circle on every row, connected or not — Wi-Fi leaves the
-// glyph bare unless the network is the one in use. That is macOS, not an
-// oversight: see reference/macos/bluetooth-panel-tahoe.png next to the iOS
-// network list in reference/macos/raw.
+// glyph bare unless the network is in use. That is macOS, not an oversight.
 .row-mark.disc.off {
   .menu.light & { background-color: rgba(0, 0, 0, 0.08); }
   .menu.dark  & { background-color: rgba(255, 255, 255, 0.18); }
 }
-// The box has to be centre-aligned in the yuck, not left to fill: a filling
-// child takes the whole 23pt circle, and `contain` then blows the 20x16 canvas
-// up to 28.75 wide — the glyph comes out oversized AND blurry, because a 1.15x
-// scale of an already-rasterised SVG lands on no pixel grid.
+// Must be centre-aligned in the yuck, not left to fill: a filling child takes
+// the whole 23pt circle and `contain` then blows the canvas up to 28.75 wide,
+// oversized and blurry (a 1.15x scale of a rasterised SVG hits no pixel grid).
 .row-glyph {
   min-width: 20px * $ui-scale;          // the glyph canvas aspect — see .status-icon
   min-height: 16px * $ui-scale;
@@ -105,23 +93,19 @@
   background-position: center;
   background-size: contain;
 }
-// Trailing, and macOS draws it dimmer than the row's own text.
+// Trailing, dimmer than the row's own text.
 //
-// The image is set HERE rather than as an inline `:style` on the widget. eww
-// turns every inline style into its own GTK style provider, and the Wi-Fi list
-// is 50 rows: adding a second inline-styled box per row was enough that the
-// panel's layer surface stopped mapping at all — the menu opened, eww listed it
-// as an active window, and nothing was ever drawn. The glyph is the same file
-// on every row, so it belongs in the stylesheet anyway.
+// The image is set HERE, not as an inline `:style`: eww turns every inline style
+// into its own GTK style provider, and a second one per row across a 50-network
+// list stopped the panel's layer surface mapping at all.
 .menu.light .row-lock {
   background-image: url("/home/al/.config/eww/icons/light/lock-badge-symbolic.svg");
 }
 .menu.dark .row-lock {
   background-image: url("/home/al/.config/eww/icons/dark/lock-badge-symbolic.svg");
 }
-// Width is what sizes this one: the box is taller than the canvas aspect, so
-// `contain` fits the 20-wide canvas into it. 11.25 = 9 * 20/16, which keeps the
-// padlock's ink the size it was before the canvas grew.
+// Width sizes this one: the box is taller than the canvas aspect, so `contain`
+// fits the 20-wide canvas into it. 11.25 = 9 * 20/16, keeping the ink's size.
 .row-lock {
   min-width: 11.25px * $ui-scale;
   min-height: 12px * $ui-scale;
@@ -133,10 +117,8 @@
 }
 
 .sw-btn { background-color: transparent; }
-// 38 x 21 with a round 18pt knob, measured off the Wi-Fi panel: track edges at
-// x 253 and 291, knob at 270.5..289.5 and y 14..32. The old 46x20 track with a
-// 30x18 oval knob came from the Tahoe reference shots, where the control really
-// is a different shape. On 15.7.9 it is the same round-knob switch as iOS.
+// 38 x 21 with a round 18pt knob, measured off the Wi-Fi panel. On 15.7.9 this
+// is the iOS round-knob switch, not the oval-knob one in the Tahoe shots.
 .sw {
   min-width: 38px * $ui-scale;
   min-height: 21px * $ui-scale;
@@ -148,9 +130,8 @@
 .sw-knob {
   min-width: 18px * $ui-scale;
   min-height: 18px * $ui-scale;
-  // GTK3 floors a fractional margin to whole pixels, so 1.5 * 1.25 would land
-  // at 1px horizontally while the track's ceil'd min-height still left 2px above
-  // and below the knob. Round it so the inset is the same on all four sides.
+  // Rounded because GTK3 floors a fractional margin, which would leave 1px of
+  // inset horizontally against the track's ceil'd 2px vertically.
   margin: round(1.5px * $ui-scale);
   border-radius: 9px * $ui-scale;
   background-color: #ffffff;

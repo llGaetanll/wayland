@@ -1,6 +1,5 @@
 ;; Same pattern as Wi-Fi. A device click toggles its connection and leaves the
-;; menu open so the status updates in place — that difference is a rule in the
-;; daemon, not something this file decides.
+;; menu open so the status updates in place; that rule lives in the daemon.
 (defvar bt '{"enabled":true,"subtitle":"","list_h":40,"devices":[]}')
 (defvar bt_connecting "")
 
@@ -19,10 +18,8 @@
           (for d in {bt.devices}
             (button :class "row" :onclick "eww-state bt connect ${d.mac_b64}"
               (box :space-evenly false :spacing 8 :valign "center"
-                ;; Same leading column as Wi-Fi. Every device shows the same
-                ;; glyph for now; the per-kind icons macOS uses would need the
-                ;; device class out of bluetoothctl, which the daemon does not
-                ;; read yet.
+                ;; Same leading column as Wi-Fi. One glyph for every device;
+                ;; per-kind icons would need the class out of bluetoothctl.
                 (box :class "row-mark disc ${d.connected ? 'on' : 'off'}" :valign "center"
                      :halign "center"
                   (box :class "row-glyph" :halign "center" :valign "center"

@@ -1,9 +1,7 @@
-;; `eww-state shot capture` (bound to Print) runs the region select and stages
-;; the result, then opens this menu with Copy / Save / Discard. Its own open var
-;; and backdrop, outside the `menu` group, since a keybind popup should neither
-;; close nor be closed by a bar dropdown. The shot is a background-image box
-;; sized by the daemon to the captured aspect ratio, so it clips to rounded
-;; corners without distorting.
+;; `eww-state shot capture` (bound to Print) runs the region select, stages the
+;; result, and opens this menu. Its own backdrop, outside the `menu` group, since a
+;; keybind popup should neither close nor be closed by a bar dropdown. The shot is
+;; a background-image box sized by the daemon to the captured aspect ratio.
 (defvar shot_path "")
 (defvar shot_w 320)
 (defvar shot_h 200)
@@ -12,12 +10,9 @@
   (box :class "menu shot ${theme}" :orientation "vertical" :space-evenly false :spacing 10
     (box :class "shot-preview" :halign "center"
          :style "background-image: url('${shot_path}'); min-width: ${shot_w}px; min-height: ${shot_h}px;")
-    ;; `:show-truncated false` on every one of these. An eww label truncates by
-    ;; default, which makes its minimum width a single character and an ellipsis
-    ;; — so a narrow card does not grow to fit its buttons, it shrinks them, and
-    ;; a small region gave three buttons reading "C…", "Sa…" and "Di…". Saying
-    ;; the labels may not be cut is what puts the card's minimum width back
-    ;; under the control of what is written on them.
+    ;; `:show-truncated false` on every one: an eww label truncates by default,
+    ;; making its minimum width one character and an ellipsis, so a small region
+    ;; gave three buttons reading "C…", "Sa…" and "Di…".
     (box :class "shot-actions" :space-evenly true :spacing 8
       (button :class "shot-btn" :onclick "eww-state shot copy"
         (label :show-truncated false :text "Copy"))
@@ -33,8 +28,7 @@
   :focusable false
   (shot-panel))
 
-;; Its own click-catcher, not the shared `menu-backdrop`, so a click outside
-;; dismisses only the shot and leaves any bar menu alone.
+;; Its own click-catcher, so a click outside leaves any bar menu alone.
 (defwindow shot-backdrop
   :monitor 0
   :geometry (geometry :width "100%" :height "100%" :anchor "center")

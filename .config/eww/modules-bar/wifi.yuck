@@ -7,18 +7,15 @@
 
 (defwidget wifi-panel []
   (box :class "menu ${theme}" :orientation "vertical" :space-evenly false
-    ;; Title and switch, nothing else. macOS carries no subtitle here: the
-    ;; network in use is the one marked in the list, not a line under the title.
+    ;; Title and switch, nothing else — macOS carries no subtitle here.
     (box :class "menu-head" :space-evenly false :valign "center"
       (label :class "menu-title" :text "Wi-Fi" :halign "start" :hexpand true)
       (button :class "sw-btn" :valign "center" :onclick "eww-state wifi toggle"
         (box :class "sw ${wifi.enabled ? 'on' : 'off'}" :valign "center" :vexpand false
           (box :class "sw-knob" :valign "center" :halign {wifi.enabled ? "end" : "start"}))))
     (box :class "sep")
-    ;; The network in use, then everything else — the two sections macOS shows.
-    ;; The daemon publishes them as separate arrays because a widget cannot
-    ;; partition a list, and labelling one list "Known Network" was wrong about
-    ;; every row but one.
+    ;; The two sections macOS shows. The daemon publishes them as separate arrays
+    ;; because a widget cannot partition a list.
     (label :class "menu-section" :text "Known Network" :halign "start"
            :visible {wifi.has_known})
     (box :orientation "vertical" :space-evenly false
@@ -53,17 +50,13 @@
                        :limit-width 24 :show-truncated true)
                 (label :class "row-connecting" :text "Connecting…"
                        :visible {n.ssid == wifi_connecting})
-                ;; The padlock is a trailing item in macOS, at the right-hand
-                ;; edge of the row, not a badge on the signal glyph: measured at
-                ;; x 280..289 in a panel whose right edge is 305. Its image is
-                ;; set in the stylesheet rather than by an inline :style — see
-                ;; the note on .row-lock in util/card.scss.
+                ;; Trailing, at the row's right edge, not a badge on the signal
+                ;; glyph. Its image is set in the stylesheet — see .row-lock.
                 (box :class "row-lock" :valign "center"
                      :visible {n.secure})))))))))
 
-;; focusable false is required: focusable true grabs keyboard focus and breaks
-;; the click-outside backdrop. The cost is no Esc dismiss, since eww's
-;; onkeypressed needs focus; that would need a Hyprland keybind instead.
+;; focusable false is required: true grabs keyboard focus and breaks the
+;; click-outside backdrop. The cost is no Esc dismiss, which needs focus.
 (defwindow wifi-menu
   :monitor 0
   ;; 8 / 4 / 298 pt x 1.25

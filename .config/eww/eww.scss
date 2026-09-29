@@ -1,7 +1,5 @@
-// Only the import list. Order matters: the theme defines the variables every
-// module uses, util/card.scss is the panel grammar that the bar dropdowns, the
-// launcher and the screenshot preview all build on, and each module file after
-// it may override what it set.
+// Import list only. Order matters: theme defines the variables, util/card.scss
+// is the panel grammar every dropdown builds on, and modules may override it.
 
 @import "theme/colors";
 @import "theme/metrics";

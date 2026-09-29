@@ -1,5 +1,5 @@
-// Reuses the .menu card. The shot is a rounded background-image box sized by
-// screenshot.sh to the captured aspect ratio, so it never distorts.
+// Reuses the .menu card; the preview box is sized by the daemon to the captured
+// aspect ratio, so it never distorts.
 .shot { padding: 10px * $ui-scale; }
 .shot-preview {
   border-radius: 8px * $ui-scale;
@@ -8,9 +8,9 @@
   background-size: cover;
 }
 .shot-actions { margin-top: 2px * $ui-scale; }
-// Horizontal padding as well as vertical: with the labels no longer allowed to
-// be cut, the smallest card is the one these three buttons ask for, and at that
-// size a label with no padding sits hard against the edge of its button.
+// Horizontal padding too: with the labels not allowed to be cut, these three
+// buttons set the card's minimum width, and at that size a bare label sits hard
+// against the edge of its button.
 .shot-btn {
   padding: 6px * $ui-scale 10px * $ui-scale;
   border-radius: 7px * $ui-scale;

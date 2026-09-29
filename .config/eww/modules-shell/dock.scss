@@ -1,26 +1,23 @@
-// Every number in this block is measured off desktop/full-desktop.png and
-// recorded in ~/macos-match/targets.json. The slab is centred, sitting 5 points
-// off the bottom of the screen, and the tiles are on the $dock-tile grid.
-// The padding is deliberately uniform: no running dots any more, so the tiles
-// are the only thing in the slab and they sit dead centre in it.
+// Measured off desktop/full-desktop.png, recorded in ~/macos-match/targets.json:
+// the slab is centred 5 points off the bottom and the tiles are on the
+// $dock-tile grid. Uniform padding — no running dots, so the tiles are all
+// that is in the slab and they sit dead centre.
 .dock {
   border-radius: 10px * $ui-scale;      // corner profile off the right edge gives r 8-10
   padding: 4px * $ui-scale;
 }
 
-// One tile, and the grid itself: the cell is exactly one pitch wide, so the
-// tiles tile. Fixed size, so nothing inside one can move a neighbour.
+// One tile, and the grid: the cell is exactly one pitch wide. Fixed size, so
+// nothing inside one can move a neighbour.
 .dock-cell {
   min-width: $dock-tile * $ui-scale;
   min-height: $dock-tile * $ui-scale;
 }
 
-// A background-image rather than an image widget, so the icon is one GPU
-// texture and hover can be a CSS transition instead of a subprocess.
-// The icon fills the whole cell rather than sitting inside it: the .icns
-// artwork carries about 10% of transparent margin, and what macOS lines up on
-// the tile grid is the artwork, not the canvas. Drawn at the full pitch the
-// visible ink comes out about 80% of it, which is what the capture shows.
+// A background-image rather than an image widget, so the icon is one GPU texture
+// and hover can be a CSS transition. It fills the whole cell because the .icns
+// artwork carries ~10% transparent margin, and what macOS lines up on the grid is
+// the artwork: at full pitch the visible ink lands at ~80%, as the capture shows.
 .dock-icon {
   min-width: $dock-tile * $ui-scale;
   min-height: $dock-tile * $ui-scale;
@@ -28,16 +25,13 @@
   background-position: center;
   background-size: contain;
 }
-// macOS ships with Dock magnification OFF, and the capture confirms it — every
-// tile in full-desktop.png is the same size. So hovering brightens rather than
+// macOS ships with Dock magnification OFF, so hovering brightens rather than
 // grows, which also keeps the slab from resizing under the pointer.
 .dock-btn { background-color: transparent; }
 .dock-btn:hover .dock-icon { opacity: 0.78; }
 
-// A minimized window. macOS draws it at the tile height with its own aspect
-// ratio, so the tile is as wide as the window was and the badge lands on the
-// picture's corner rather than floating below it. The width is an inline style
-// the daemon works out; only the height is a constant.
+// A minimized window, drawn at the tile height in its own aspect ratio. The
+// width is an inline style the daemon works out; only the height is a constant.
 .dock-thumb {
   min-height: $dock-tile * $ui-scale;
   background-repeat: no-repeat;
@@ -46,11 +40,9 @@
 }
 .dock-btn:hover .dock-thumb { opacity: 0.78; }
 
-// The app icon badged on the corner. Half the tile, in the corner of the cell
-// rather than of the image: the image is letterboxed inside the cell and GTK
-// has no way to align anything to where a background-image actually landed.
-// An app that is not in the dock has no icon path, and an empty url draws
-// nothing, which is the right answer rather than a missing-image box.
+// Half the tile, in the corner of the cell rather than of the image: the image is
+// letterboxed inside the cell and GTK cannot align to where it actually landed.
+// An app not in the dock has no icon path, and an empty url draws nothing.
 .dock-badge {
   min-width: $dock-tile * 0.5 * $ui-scale;
   min-height: $dock-tile * 0.5 * $ui-scale;
@@ -59,15 +51,12 @@
   background-size: contain;
 }
 
-// The hairline between the apps and the minimized windows, sitting in its own
-// gap rather than tight against either neighbour. A box in the dock's horizontal row is
-// stretched to the full row height unless it is told otherwise, which is what
-// the :valign/:vexpand in the yuck are for; with those in place this height is
-// the one it gets, and it is the icon artwork's visible ink (about 80% of the
-// cell) rather than the cell.
-// GTK3 CSS has no max-* properties, and one unknown property makes eww drop
-// the ENTIRE stylesheet — every widget goes stock-Adwaita white. Don't reach
-// for max-height here.
+// The hairline between the apps and the minimized windows. A box in the dock's
+// row stretches to the full row height unless told otherwise, which is what the
+// :valign/:vexpand in the yuck are for; the height here is the icon artwork's
+// visible ink (~80% of the cell), not the cell.
+// GTK3 CSS has no max-* properties, and one unknown property makes eww drop the
+// ENTIRE stylesheet — every widget goes stock-Adwaita white. No max-height here.
 .dock-sep {
   min-width: 1px;
   min-height: $dock-tile * 0.82 * $ui-scale;
@@ -76,8 +65,7 @@
 .dock.dark  .dock-sep { background-color: rgba(255, 255, 255, 0.22); }
 .dock.light .dock-sep { background-color: rgba(0, 0, 0, 0.18); }
 
-// Hairline edge, the same inset shadow the menus use (see .menu) and the same
-// weight as the 1px window border in hyprland.lua. Inset rather than a `border`
-// so it does not grow the slab past the measured padding.
+// The same inset hairline the menus use (see .menu), at the weight of the 1px
+// window border. Inset rather than a `border` so it does not grow the slab.
 .dock.light { background-color: $dock-light; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12); }
 .dock.dark  { background-color: $dock-dark;  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.20); }

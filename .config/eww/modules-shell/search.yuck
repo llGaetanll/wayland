@@ -1,46 +1,35 @@
-;; The launcher, on SUPER + Space. Its own window and its own backdrop, outside
-;; the `menu` group for the same reason the screenshot preview is: a keybind
-;; popup should neither dismiss a bar dropdown nor be dismissed by one.
+;; The launcher, on SUPER + Space. Its own window and backdrop, outside the `menu`
+;; group: a keybind popup should neither dismiss a bar dropdown nor be dismissed
+;; by one.
 ;;
-;; The text lives in this entry rather than in the daemon. A round trip from a
-;; keystroke to a published var and back is about 30ms, so a daemon-owned buffer
-;; would draw the letters behind the typing, and an echo landing after the next
-;; keystroke would delete it. What the daemon owns is the ranking, the
-;; highlight, and whether this window is open at all.
+;; The text lives in this entry, not in the daemon: a keystroke-to-published-var
+;; round trip is ~30ms, so a daemon-owned buffer would draw the letters behind the
+;; typing. The daemon owns the ranking, the highlight, and whether this is open.
 (defvar search_hits "[]")
 (defvar search_h 0)
 (defvar search_none false)
 (defvar search_empty true)
 
-;; The two handlers that carry typed text, and the reason they look like this.
+;; The two handlers that carry typed text, and why they look like this.
 ;;
-;; eww substitutes `{}` by plain textual replacement — `cmd.replace("{}", value)`
-;; in crates/eww/src/widgets/mod.rs — and then hands the result to `/bin/sh -c`.
-;; Nothing is quoted anywhere on that path, so whatever is typed here is a shell
-;; command line: an apostrophe in "don't" ends an argument, and `$(…)` or a
-;; backtick runs. A quoted heredoc is what makes it inert — inside `<<'EWWQ'`
-;; nothing expands at all — and `"$(cat …)"` puts the result back together as one
-;; argument, spaces and all. The delimiter cannot collide with what is typed
-;; because a GtkEntry holds no newlines.
+;; eww substitutes `{}` by plain textual replacement and hands the result to
+;; `/bin/sh -c`, quoting nothing — so typed text is a shell command line, where an
+;; apostrophe ends an argument and `$(…)` runs. The quoted heredoc makes it inert,
+;; and `"$(cat …)"` puts it back together as one argument. The delimiter cannot
+;; collide with the text because a GtkEntry holds no newlines.
 ;;
-;; `<<'EWWQ'`, NOT `<<\EWWQ`: yuck eats the backslash while unescaping the
-;; string, which turns it back into an expanding heredoc that runs what it is
-;; given. Tested; do not "simplify" it.
+;; `<<'EWWQ'`, NOT `<<\EWWQ`: yuck eats the backslash while unescaping, turning it
+;; back into an expanding heredoc that runs what it is given. Do not "simplify".
 ;;
-;; Return carries the text as well as changing it. eww runs each handler on a
-;; thread of its own, so the change for the last letter typed and the Return
-;; that follows it race; the text on the Return is what settles it.
+;; Return carries the text as well as changing it: eww runs each handler on its own
+;; thread, so the last letter's change and the Return race, and the Return settles it.
 (defwidget search-panel []
   (box :class "menu search ${theme}" :orientation "vertical" :space-evenly false
-    ;; eww's `input` has no placeholder property — not in 0.6.0, and not
-    ;; upstream either — so the prompt is a dimmed label laid over the empty
-    ;; field. The entry is the overlay's first child, so it is what decides the
-    ;; size; a label has no window of its own, so clicks still reach the entry
-    ;; through it.
-    ;;
-    ;; It hides on `search_empty`, which is the daemon's word for it and so
-    ;; arrives a round trip after the keystroke that emptied the field. For
-    ;; ~30ms the first character typed is drawn over the prompt.
+    ;; eww's `input` has no placeholder property, so the prompt is a dimmed label
+    ;; over the empty field. The entry is the overlay's first child and so decides
+    ;; the size; a label has no window of its own, so clicks pass through it.
+    ;; It hides on `search_empty`, the daemon's word, which arrives a round trip
+    ;; later — for ~30ms the first character is drawn over the prompt.
     (box :class "search-field"
       (overlay
         (input :class "search-input" :hexpand true
@@ -59,8 +48,7 @@ EWWQ
          :visible {search_h > 0}
       (for hit in search_hits
         ;; The command, not the row's position: the list can be rebuilt between
-        ;; the frame the user saw and the click landing on it. Base64 for the
-        ;; same reason an SSID is — this one goes through a shell too.
+        ;; the frame seen and the click landing. Base64 because it hits a shell.
         (button :class {hit.sel ? "search-row sel" : "search-row"}
                 :onclick "eww-state search launch ${hit.exec_b64}"
           (box :orientation "horizontal" :space-evenly false :spacing 12
@@ -71,20 +59,14 @@ EWWQ
     (box :class "search-list" :visible search_none
       (label :class "search-empty" :text "No Results"))))
 
-;; :focusable true is what gives the entry a keyboard at all — it sets the layer
-;; surface's keyboard interactivity, and without it the field can never be typed
-;; into. The compositor still sees every key first, which is how the submap in
-;; hyprland.lua takes Escape and the arrows while letters carry on reaching here.
+;; :focusable true is what gives the entry a keyboard at all: it sets the layer
+;; surface's keyboard interactivity. The compositor still sees every key first,
+;; which is how the submap in hyprland.lua takes Escape and the arrows.
 (defwindow search
   :monitor 0
-  ;; Anchored to the top, not centred, and that is the whole reason the field
-  ;; holds still. A centred window grows in both directions as results arrive,
-  ;; so the entry slid up the screen by ~186px between an empty list and a full
-  ;; one and the text you were typing moved out from under the cursor. Anchored
-  ;; here the top edge is fixed and the list grows downward off it.
-  ;;
-  ;; 330px puts the field where the centred panel used to sit with about four
-  ;; results — the common case — so the usual view is unchanged.
+  ;; Anchored to the top, not centred, so the field holds still: a centred window
+  ;; grows both ways as results arrive and slid the entry ~186px up the screen.
+  ;; 330px puts it where the centred panel sat at about four results.
   :geometry (geometry :anchor "top center" :x "0px" :y "330px" :width "640px")
   :stacking "overlay"
   :focusable true

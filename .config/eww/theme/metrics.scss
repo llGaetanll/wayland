@@ -1,30 +1,18 @@
-// The single scale knob for every eww surface.
+// The single scale knob for every eww surface. Lengths are written as
+// `<macOS points> * $ui-scale`, the points coming from ~/macos-match/targets.json.
+// Not 1 because the captures are from a 2x Retina Mac: at 1.0 every surface
+// comes out ~1.4x physically smaller here. 1.25 splits the difference.
 //
-// Every length in the stylesheets is written as `<macOS points> * $ui-scale`,
-// so the measured number stays visible next to it and this is the only value
-// to change. The macOS points come from ~/macos-match/targets.json, measured
-// off the captures in ~/macos-ui-capture.
-//
-// Why it is not 1: the capture machine is a 2x Retina Mac, where one point is
-// about two physical pixels. This panel is 1920x1200 over ~14.5", so at scale
-// 1.0 one point is one physical pixel and every surface comes out roughly 1.4x
-// physically smaller than the same design on the Mac. 1.25 splits the
-// difference and keeps the bar compact.
-//
-// KEEP IN SYNC: `ui_scale` in eww-state (crates/module-bar/src/config.rs). The
-// daemon needs the same number because it sizes the dropdown scroll areas in
-// rows, and modules-shell/dock.yuck needs it for window geometry, which CSS cannot set.
+// KEEP IN SYNC: `ui_scale` in eww-state (crates/module-bar/src/config.rs), which
+// sizes the dropdown scroll areas in rows, and modules-shell/dock.yuck, which
+// needs it for window geometry that CSS cannot set.
 $ui-scale: 1.25;
 
 // The dock tile pitch, separate from $ui-scale because it is not a scaling
-// question. 34pt is what the capture measures, but that Dock held eleven apps
-// and macOS shrinks its tiles as the Dock fills — 34 is the squeezed size, not
-// the size macOS picks by default. With a handful of apps the slab sat at 42pt
-// and the ratio against the 24pt menu bar is the same 1.75 either way, which is
-// why the dock reads as small next to the bar rather than out of proportion to
-// it. Raise this alone to grow the dock without touching the bar.
+// question. The capture measures 34pt, but macOS shrinks tiles as the Dock fills
+// and that one held eleven apps; with a handful it sits at 42. Raise this alone
+// to grow the dock without touching the bar.
 //
-// KEEP IN SYNC: the `dock-low` geometry in modules-shell/dock.yuck. That window drops the slab
-// until only 10px shows, so its offset is 10 - (this + 8) * $ui-scale, and eww
-// resolves defwindow geometry statically -- CSS cannot reach it.
+// KEEP IN SYNC: the `dock-low` geometry in modules-shell/dock.yuck, whose offset
+// is 10 - (this + 8) * $ui-scale -- eww resolves defwindow geometry statically.
 $dock-tile: 44px;
