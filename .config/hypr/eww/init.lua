@@ -14,7 +14,7 @@ require "eww.screenshot"
 -- out of this -- blurring a fullscreen surface every frame near-locks the
 -- machine.
 -- KEEP IN SYNC with :namespace in ~/.config/eww/eww.yuck.
-hl.layer_rule({ name = "eww-blur", match = { namespace = "^(gtk-layer-shell|eww-bar|eww-dock)$" }, blur = true, ignore_alpha = 0.2 })
+hl.layer_rule({ name = "eww-blur", match = { namespace = "^(gtk-layer-shell|eww-bar|eww-dock|eww-dock-low)$" }, blur = true, ignore_alpha = 0.2 })
 
 -- Bar and dock slide off the edge they are anchored to when eww-state closes
 -- them for a fullscreen Space, and slide back in when it reopens them. Nothing
@@ -23,6 +23,10 @@ hl.layer_rule({ name = "eww-blur", match = { namespace = "^(gtk-layer-shell|eww-
 -- inferred from the anchor, so a geometry change cannot silently reverse one.
 hl.layer_rule({ name = "eww-bar-slide",  match = { namespace = "^eww-bar$" },  animation = "slide top" })
 hl.layer_rule({ name = "eww-dock-slide", match = { namespace = "^eww-dock$" }, animation = "slide bottom" })
+-- The lowered dock is a swap, not an arrival: the plain dock is sliding out at
+-- the same moment, and a second surface sliding in behind it reads as the dock
+-- bouncing. It appears and disappears where it belongs instead.
+hl.layer_rule({ name = "eww-dock-low-no-anim", match = { namespace = "^eww-dock-low$" }, no_anim = true })
 
 -- The menus keep the pop they have always had: the layers leaf in
 -- config/animations.lua is what makes layer animation happen at all, and

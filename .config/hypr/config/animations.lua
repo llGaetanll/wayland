@@ -39,8 +39,8 @@ hl.animation({ leaf = "fadeOut",    enabled = true, speed = 3, bezier = "outQuin
 -- per-namespace rules in eww/init.lua. Slower than the windows leaf on purpose:
 -- macOS takes about 0.4s to hide the menu bar and Dock, and at speed 3 the slab
 -- is gone before the eye follows it.
-hl.animation({ leaf = "layers",    enabled = true, speed = 4, bezier = "smooth", style = "slide" })
+hl.animation({ leaf = "layers",    enabled = true, speed = 4, bezier = "outQuint", style = "slide" })
 -- The in/out leaves are set explicitly rather than left to inherit: they each
 -- carry their own speed, and `hyprctl animations` reports them still at 0.
-hl.animation({ leaf = "layersIn",  enabled = true, speed = 4, bezier = "smooth", style = "slide" })
-hl.animation({ leaf = "layersOut", enabled = true, speed = 4, bezier = "smooth", style = "slide" })
+hl.animation({ leaf = "layersIn",  enabled = true, speed = 4, bezier = "outQuint", style = "slide" })
+hl.animation({ leaf = "layersOut", enabled = true, speed = 4, bezier = "outQuint", style = "slide" })

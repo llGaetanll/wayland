@@ -37,15 +37,6 @@
         (box :class "dock-icon" :halign "center" :valign "center"
              :style "background-image: url('${icon}');")))))
 
-;; The Trash is not in dock.conf: in macOS it is not a dock app you can reorder
-;; or remove, it is a fixture at the end past the separator. Modelling it as one
-;; would make it draggable and let the user drop another app onto it.
-(defwidget trash []
-  (button :class "dock-btn trash" :onclick "eww-state dock launch trash"
-    (box :class "dock-cell" :halign "center" :valign "center"
-      (box :class "dock-icon" :halign "center" :valign "center"
-           :style "background-image: url('/home/al/.config/eww/icons/apps/trash.png');"))))
-
 ;; Windows put away in the dock. macOS keeps these past the separator, to the
 ;; right of every app and in the order they were minimized, and draws the window
 ;; itself rather than its app icon — the icon is badged on the corner so it is
@@ -71,21 +62,24 @@
 (defwidget dock []
   ;; The `for` lives in its own box on purpose. eww appends the widgets a `for`
   ;; produces to the parent AFTER the siblings written below it, so with the
-  ;; loop as a direct child the Trash and the separator came out at the left-
-  ;; hand end of the dock, in front of every app. Giving the loop a container of
-  ;; its own makes this box's three children static, and static children keep
-  ;; the order they are written in.
+  ;; loop as a direct child the separator came out at the left-hand end of the
+  ;; dock, in front of every app. Giving the loop a container of its own makes
+  ;; this box's children static, and static children keep the order they are
+  ;; written in.
   (box :class "dock ${theme}" :space-evenly false :valign "center" :spacing 0
     (box :class "dock-apps" :space-evenly false :spacing 0
       (for a in {dock_apps}
         (applaunch :id {a.id} :icon {a.icon})))
-    (box :class "dock-sep" :valign "center" :vexpand false)
+    ;; The separator only divides something when there is something on its
+    ;; right: with no window put away it is the dock's last child, a hairline
+    ;; hanging off the end of the apps.
+    (box :class "dock-sep" :valign "center" :vexpand false
+         :visible {arraylength(dock_minimized) > 0})
     ;; Its own box for the same reason the app loop has one.
     (box :class "dock-minimized" :space-evenly false :spacing 0
       (for m in {dock_minimized}
         (minimized :addr {m.addr} :thumb {m.thumb} :icon {m.icon}
-                   :title {m.title} :width {m.width})))
-    (trash)))
+                   :title {m.title} :width {m.width})))))
 
 (defwindow dock
   :monitor 0
@@ -102,6 +96,26 @@
   ;; also catching the menus, which share the default gtk-layer-shell one.
   ;; KEEP IN SYNC with the layer rules in ~/.config/hypr/hyprland.lua.
   :namespace "eww-dock"
+  (dock))
+
+;; The same dock, dropped until only its top edge shows, for when the windows
+;; below it are tiled rather than floating and it would otherwise sit on top of
+;; one. eww-state opens this one or the plain dock, never both.
+;; -43px = 10 - 53: the slab is 53px tall, and 10px of it stays on screen, which
+;; puts its top edge exactly halfway between the bottom of a tiled window and
+;; the bottom of the screen. KEEP IN SYNC with general:gaps_out (20) and
+;; general:border_size (1) in ~/.config/hypr/config/options.lua -- a tiled
+;; window's bottom edge is 21px up from the screen's.
+(defwindow dock-low
+  :monitor 0
+  :geometry (geometry :y "-43px" :anchor "bottom center")
+  :stacking "overlay"
+  :exclusive false
+  :focusable false
+  ;; Its own namespace, not the dock's: it has to be told apart from the plain
+  ;; dock by the Hyprland rules, or swapping the two plays a slide out and a
+  ;; slide in at once and the dock looks like it bounced.
+  :namespace "eww-dock-low"
   (dock))
 
 ;; Each status var is the path of the icon matching the current state, shown via
