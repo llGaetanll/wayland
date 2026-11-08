@@ -75,9 +75,9 @@ pub struct Client {
     /// it. The dock sits in front of a tiled window's bottom edge and behind a
     /// floating one, which is the only reason this is here.
     pub floating: bool,
-    /// Which monitor it is on. Nothing reads it yet — there is one screen — but
-    /// a rule that comes to need it should have to say so, rather than inherit
-    /// an assumption nobody wrote down.
+    /// Which monitor it is on. Nothing reads it yet: where a Space is opened
+    /// is the compositor's own answer to that question, asked by the monitor
+    /// relative workspace selector in `perform`.
     pub monitor: i32,
     pub geometry: Rect,
     pub class: String,
@@ -147,7 +147,7 @@ impl Snapshot {
 #[derive(Debug)]
 pub enum MoveTarget {
     /// A Space of its own: the compositor picks the first workspace with
-    /// nothing on it.
+    /// nothing on it, on the monitor the window is already on.
     Empty,
     /// Back where it came from. Emptying the Space is what makes the compositor
     /// destroy it.

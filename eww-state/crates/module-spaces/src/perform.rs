@@ -63,7 +63,10 @@ pub fn perform(action: &ActionSpaces) -> Vec<EventSpaces> {
 
 fn move_window(addr: &WindowAddr, to: &MoveTarget) {
     let workspace = match to {
-        MoveTarget::Empty => "empty".to_string(),
+        // `emptym`, not `empty`: the second is the first empty workspace
+        // anywhere, which on a second screen is usually one belonging to the
+        // other monitor, and the window would fly off the display it was on.
+        MoveTarget::Empty => "emptym".to_string(),
         MoveTarget::Workspace(w) => w.to_string(),
         MoveTarget::Hidden(name) => name.clone(),
     };
