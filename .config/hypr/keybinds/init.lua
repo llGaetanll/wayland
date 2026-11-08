@@ -1,4 +1,4 @@
-local modules = { "apps", "window", "media" }
+local modules = { "apps", "window", "media", "dictate" }
 
 for _, name in ipairs(modules) do
     for _, bind in ipairs(require("keybinds." .. name)) do
