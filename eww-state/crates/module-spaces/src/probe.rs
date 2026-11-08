@@ -52,6 +52,7 @@ fn parse_clients(out: &str) -> Vec<Client> {
                 geometry: Rect::default(),
                 class: String::new(),
                 title: String::new(),
+                pid: 0,
             });
             continue;
         }
@@ -80,6 +81,7 @@ fn parse_clients(out: &str) -> Vec<Client> {
             "at" => (client.geometry.x, client.geometry.y) = pair(value),
             "size" => (client.geometry.width, client.geometry.height) = pair(value),
             "class" => client.class = value.to_string(),
+            "pid" => client.pid = first.parse().unwrap_or(0),
             // Matched on the key rather than taken from the `Window … -> title`
             // header, which truncates and has no delimiter a title cannot
             // contain. `initialTitle` is a different key and does not land here.

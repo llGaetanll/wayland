@@ -75,6 +75,11 @@ impl ConfigBar {
             },
             battery: ConfigBattery {
                 cache_dir: cache_dir.to_string(),
+                // Beside the generated pictures but named, not derived: it is
+                // the one file here worth keeping across a restart, so a person
+                // clearing the cache should be able to see which it is.
+                history: format!("{cache_dir}/battery-history.tsv"),
+                fallback_icon: format!("{icons_dir}/apps/process.svg"),
                 ..Default::default()
             },
             bluetooth: ConfigBluetooth {

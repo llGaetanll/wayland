@@ -19,6 +19,7 @@ use module_audio::EventAudio;
 use module_audio::StateAudio;
 use module_backlight::EventBacklight;
 use module_backlight::StateBacklight;
+use module_battery::EventBattery;
 use module_battery::StateBattery;
 use module_bluetooth::EventBluetooth;
 use module_bluetooth::StateBluetooth;
@@ -27,6 +28,7 @@ use module_dock::StateDock;
 use module_search::StateSearch;
 use module_shot::EventShot;
 use module_shot::StateShot;
+use module_spaces::EventSpaces;
 use module_spaces::StateSpaces;
 use module_theme::StateTheme;
 use module_theme::Theme;
@@ -161,13 +163,20 @@ impl StateBar {
     /// letting one module read into another, which is the only direction
     /// anything here is allowed to speak in.
     fn follow_dock(&mut self) {
-        let icons = self
+        let icons: Vec<(String, String)> = self
             .dock
             .apps()
             .iter()
             .map(|a| (a.id.clone(), a.icon.clone()))
             .collect();
-        self.spaces.set_app_icons(icons);
+        self.spaces.set_app_icons(icons.clone());
+        // The energy list names apps, and an app that is one of these should be
+        // drawn with its picture rather than a generic glyph.
+        self.battery.set_app_icons(icons);
+        // And which window belongs to which process, so CPU time can be
+        // attributed to the app that owns it. Both copies come from the module
+        // that owns the fact, which is the only direction anything here speaks.
+        self.battery.set_window_owners(self.spaces.window_owners());
     }
 
     /// Apply a batch of events. This is the only way state changes, and it
@@ -470,6 +479,24 @@ impl StateBar {
             MenuId::Brightness => {
                 if opened {
                     self.backlight.handle_event(&EventBacklight::Due)
+                }
+            }
+            // Both halves of the Battery panel are expensive and neither is
+            // worth anything off screen, so like Sound it cares which way it
+            // went rather than only that it was asked.
+            MenuId::Battery => {
+                self.battery.handle_event(&if opened {
+                    EventBattery::MenuOpened
+                } else {
+                    EventBattery::MenuClosed
+                });
+                // The energy list is attributed through the compositor's window
+                // list, and Spaces is event-driven — it holds whatever the last
+                // compositor signal left behind, which after a daemon restart
+                // mid-session is nothing at all. Opening the panel is the one
+                // moment that list has to be current, so it is asked for.
+                if opened {
+                    self.spaces.handle_event(&EventSpaces::Due);
                 }
             }
         }

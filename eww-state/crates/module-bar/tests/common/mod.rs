@@ -400,6 +400,7 @@ impl World {
             },
             class: "firefox".to_string(),
             title: "Mozilla Firefox".to_string(),
+            pid: 0,
         });
         self.compositor_moved()
     }
@@ -492,14 +493,26 @@ impl World {
     fn battery(&mut self, action: module_battery::ActionBattery) -> Vec<Event> {
         use module_battery::ActionBattery;
         match action {
-            ActionBattery::Sample => vec![Event::Battery(EventBattery::Observed {
-                battery: Battery {
-                    percent: 80,
-                    charging: false,
+            ActionBattery::Sample { .. } => vec![Event::Battery(EventBattery::Observed {
+                reading: module_battery::Reading {
+                    battery: Battery {
+                        percent: 80,
+                        charging: false,
+                    },
+                    ..module_battery::Reading::default()
                 },
+                history: Vec::new(),
             })],
+            ActionBattery::SampleProcs { .. } => {
+                vec![Event::Battery(EventBattery::ProcsObserved {
+                    procs: Vec::new(),
+                })]
+            }
             ActionBattery::Render { id, .. } => {
                 vec![Event::Battery(EventBattery::Finished { id, ok: true })]
+            }
+            ActionBattery::RenderGraph { id, .. } => {
+                vec![Event::Battery(EventBattery::GraphFinished { id, ok: true })]
             }
         }
     }

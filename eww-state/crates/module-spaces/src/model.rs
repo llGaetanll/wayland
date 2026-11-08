@@ -82,6 +82,10 @@ pub struct Client {
     pub geometry: Rect,
     pub class: String,
     pub title: String,
+    /// The process the compositor says owns this window. Read by nothing here —
+    /// it is handed up so the Battery panel can tell whose CPU time is whose,
+    /// which is the only place a pid means anything.
+    pub pid: u32,
 }
 
 /// One window put away in the dock.

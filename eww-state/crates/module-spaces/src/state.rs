@@ -144,6 +144,21 @@ impl StateSpaces {
         self.layout.tiled()
     }
 
+    /// Every window the compositor is showing, as `(pid, class)`.
+    ///
+    /// Handed up so the Battery panel can attribute CPU time to the app whose
+    /// window owns it. A pid means nothing to this module; it is the
+    /// compositor's answer passed along, which is cheaper and more truthful
+    /// than a second module asking the compositor the same question.
+    pub fn window_owners(&self) -> Vec<(u32, String)> {
+        self.layout
+            .clients
+            .iter()
+            .filter(|c| c.pid != 0)
+            .map(|c| (c.pid, c.class.clone()))
+            .collect()
+    }
+
     /// This window is in a Space of its own.
     pub fn in_space(&self, addr: &WindowAddr) -> bool {
         self.origins.contains_key(addr)

@@ -45,6 +45,7 @@ fn client(a: &str, workspace: i32, fullscreen: bool) -> Client {
         },
         class: "firefox".to_string(),
         title: "Mozilla Firefox".to_string(),
+        pid: 0,
     }
 }
 

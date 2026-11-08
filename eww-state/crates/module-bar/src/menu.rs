@@ -1,6 +1,6 @@
 //! The dropdowns hanging off the top-bar status icons.
 
-/// These four are the whole set: one slot holds at most one of them, which is
+/// These five are the whole set: one slot holds at most one of them, which is
 /// what makes "two menus open at once" a state that does not exist.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum MenuId {
@@ -8,10 +8,17 @@ pub enum MenuId {
     Bt,
     Volume,
     Brightness,
+    Battery,
 }
 
 impl MenuId {
-    pub const ALL: [MenuId; 4] = [MenuId::Wifi, MenuId::Bt, MenuId::Volume, MenuId::Brightness];
+    pub const ALL: [MenuId; 5] = [
+        MenuId::Wifi,
+        MenuId::Bt,
+        MenuId::Volume,
+        MenuId::Brightness,
+        MenuId::Battery,
+    ];
 
     pub fn as_str(self) -> &'static str {
         match self {
@@ -19,6 +26,7 @@ impl MenuId {
             MenuId::Bt => "bt",
             MenuId::Volume => "volume",
             MenuId::Brightness => "brightness",
+            MenuId::Battery => "battery",
         }
     }
 
