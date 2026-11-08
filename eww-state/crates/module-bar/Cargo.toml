@@ -18,4 +18,4 @@ module-theme = { path = "../module-theme" }
 module-wifi = { path = "../module-wifi" }
 
 [dev-dependencies]
-util-eval = { path = "../util-eval" }
+eval = { path = "../../../../eval" }

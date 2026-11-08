@@ -28,7 +28,7 @@ crates/module-*     one widget each: its state machine, its event alphabet,
                     and the commands that serve it.
 crates/module-bar   the root machine. Owns the modules and routes between them.
 crates/daemon       the loop, the sockets, the timers, and making eww match.
-crates/util-*       the `eval!` test macro, and running other programs.
+crates/util-*       running other programs.
 ```
 
 A module is a pure function of events. It does not run commands, open sockets,
@@ -107,8 +107,9 @@ five-minute timeout is tested instantly.
 Each module also has its own tests, which know nothing of the bar: they ask the
 same questions the bar asks and nothing more.
 
-Machine tests drive the state machine through `eval!`, where `<` is an event in
-and `>` an action expected out:
+Machine tests drive the state machine through `eval!` (the shared macro, at
+`github.com/llGaetanll/eval`), where `<` is an event in and `>` an action
+expected out:
 
 ```rust
 eval!(&mut state,

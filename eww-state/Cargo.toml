@@ -3,7 +3,6 @@ resolver = "2"
 members = [
     "crates/api-core",
     "crates/util-exec",
-    "crates/util-eval",
     "crates/module-wifi",
     "crates/module-bluetooth",
     "crates/module-audio",

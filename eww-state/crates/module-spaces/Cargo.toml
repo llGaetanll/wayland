@@ -7,6 +7,3 @@ edition.workspace = true
 api = { path = "../api-core", package = "api-core" }
 exec = { path = "../util-exec", package = "util-exec" }
 tracing = "0.1"
-
-[dev-dependencies]
-util-eval = { path = "../util-eval" }
