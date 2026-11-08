@@ -21,3 +21,9 @@ The two that catch people most often:
 - **No `assert!`/`unwrap()`/`expect()` in production paths.** `debug_assert!` is
   encouraged in state machines instead.
 - **No banner comments** (`// ─── section ───`). Split the file instead.
+
+## Plans
+
+`plans/` holds work that is designed but not built, one file per plan. Read
+`plans/README.md` for what a plan owes its reader. Check the directory before
+starting anything substantial — the design may already exist.
