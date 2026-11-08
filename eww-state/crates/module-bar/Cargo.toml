@@ -1,0 +1,21 @@
+[package]
+name = "module-bar"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+api = { path = "../api-core", package = "api-core" }
+module-audio = { path = "../module-audio" }
+module-backlight = { path = "../module-backlight" }
+module-battery = { path = "../module-battery" }
+module-bluetooth = { path = "../module-bluetooth" }
+module-date = { path = "../module-date" }
+module-dock = { path = "../module-dock" }
+module-search = { path = "../module-search" }
+module-shot = { path = "../module-shot" }
+module-spaces = { path = "../module-spaces" }
+module-theme = { path = "../module-theme" }
+module-wifi = { path = "../module-wifi" }
+
+[dev-dependencies]
+util-eval = { path = "../util-eval" }

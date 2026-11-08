@@ -1,0 +1,27 @@
+[package]
+name = "eww-state"
+version.workspace = true
+edition.workspace = true
+build = "build.rs"
+
+[[bin]]
+name = "eww-state"
+path = "src/main.rs"
+
+[dependencies]
+api = { path = "../api-core", package = "api-core" }
+exec = { path = "../util-exec", package = "util-exec" }
+module-bar = { path = "../module-bar" }
+module-audio = { path = "../module-audio" }
+module-backlight = { path = "../module-backlight" }
+module-battery = { path = "../module-battery" }
+module-bluetooth = { path = "../module-bluetooth" }
+module-date = { path = "../module-date" }
+module-dock = { path = "../module-dock" }
+module-search = { path = "../module-search" }
+module-shot = { path = "../module-shot" }
+module-spaces = { path = "../module-spaces" }
+module-theme = { path = "../module-theme" }
+module-wifi = { path = "../module-wifi" }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["std", "fmt"] }
