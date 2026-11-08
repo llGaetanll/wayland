@@ -115,7 +115,12 @@ fn parse_active(out: &str) -> (WorkspaceId, Option<WindowAddr>) {
     let mut focused = WorkspaceId::default();
     let mut window = None;
     for line in out.lines() {
-        if let Some(rest) = line.strip_prefix("workspace ID ") {
+        if let Some(rest) = line.strip_prefix("workspace ") {
+            // Hyprland has spelled this header both `workspace ID 2 (2)` and
+            // `workspace 2 (2)`, so the word is skipped if it is there rather
+            // than required. Getting this wrong leaves no workspace focused,
+            // and every rule asking what is on the focused one answers no.
+            let rest = rest.strip_prefix("ID ").unwrap_or(rest);
             if let Ok(id) = rest
                 .split_whitespace()
                 .next()
@@ -240,6 +245,18 @@ workspace ID 2 (2) on monitor eDP-1:
             window.map(|w| w.to_string()).as_deref(),
             Some("0x558156ab0980")
         );
+    }
+
+    /// The header has been spelled both ways across Hyprland versions.
+    #[test]
+    fn the_header_may_omit_the_word_id() {
+        let out = "\
+workspace 2 (2) on monitor eDP-1:
+\tlastwindow: 0x558156ab0980
+";
+        let (focused, window) = parse_active(out);
+        assert_eq!(focused.0, 2);
+        assert!(window.is_some());
     }
 
     #[test]
