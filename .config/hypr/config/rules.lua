@@ -10,4 +10,7 @@ hl.window_rule({ name = "firefox-size", match = { class = "[Ff]irefox" }, size =
 -- state, so it follows the window in and out.
 hl.window_rule({ name = "fullscreen-no-chrome", match = { fullscreen = true }, border_size = 0, rounding = 0 })
 
+-- mako's toasts get the same frosted material as the eww menus.
+hl.layer_rule({ name = "mako-blur", match = { namespace = "^notifications$" }, blur = true, ignore_alpha = 0.2 })
+
 return { float_all = float_all }
